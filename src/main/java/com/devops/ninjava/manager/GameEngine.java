@@ -1,5 +1,6 @@
 package com.devops.ninjava.manager;
 
+import com.devops.ninjava.model.enemy.Goomba;
 import com.devops.ninjava.model.hero.Player;
 import javafx.animation.AnimationTimer;
 import javafx.application.Application;
@@ -13,12 +14,16 @@ import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 import javafx.stage.Stage;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class GameEngine extends Application {
 
     private static final int WIDTH = 800;
     private static final int HEIGHT = 600;
 
     private Player player;
+    private List<Goomba> goombas;
     private boolean isRunning;
     private GameStatus gameStatus;
 
@@ -48,10 +53,12 @@ public class GameEngine extends Application {
         drawInitialBackground();
 
         // Initialisation de l'état du jeu
-        gameStatus = GameStatus.START_SCREEN;
+        gameStatus = GameStatus.RUNNING;
 
         // Afficher le score
         initializeScoreLabel();
+        initializeGoombas();
+
 
         // Gestion des entrées utilisateur
         scene.setOnKeyPressed(event -> handleKeyPressed(event.getCode().toString()));
@@ -62,11 +69,12 @@ public class GameEngine extends Application {
             @Override
             public void handle(long now) {
                 if (isRunning && gameStatus == GameStatus.RUNNING) {
-                    gameLoop();
+                    player.update(); // Mise à jour de l'état du joueur
+                    updateGoombas();
+                    updateScore(); // Mise à jour du score
                 }
             }
         };
-
         // Démarrage du jeu
         gameLoop.start();
         isRunning = true;
@@ -76,6 +84,20 @@ public class GameEngine extends Application {
         stage.show();
     }
 
+    private void initializeGoombas() {
+        goombas = new ArrayList<>();
+        for (int i = 0; i < 5; i++) { // Ajouter 3 Goombas pour l'exemple
+            Goomba goomba = new Goomba(200 + i * 150, 500); // Position initiale
+            goombas.add(goomba);
+            root.getChildren().add(goomba); // Ajouter le Goomba à l'interface
+        }
+    }
+
+    private void updateGoombas() {
+        for (Goomba goomba : goombas) {
+            goomba.update(); // Mise à jour des Goombas
+        }
+    }
 
     private void drawInitialBackground() {
         GraphicsContext gc = canvas.getGraphicsContext2D();
@@ -106,6 +128,7 @@ public class GameEngine extends Application {
 
 
     private void gameLoop() {
+        System.out.println("Game loop started.");
         player.update(); // Mise à jour de l'état du joueur
         updateBackground(); // Mettre à jour la position du background
         checkCollisions(); // Vérifier les collisions
@@ -158,6 +181,7 @@ public class GameEngine extends Application {
             case "LEFT" -> player.moveLeft(); // Déplacement à gauche
             case "UP" -> {
                 player.jump(); // Saut
+                player.update();
                 System.out.println("jump");
             }
             case "P" -> togglePauseResume(); // Pause/Resume

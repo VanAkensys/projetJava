@@ -16,30 +16,25 @@ public class Player extends Pane {
     private int floor; // Hauteur minimale atteignable par le joueur
     private int jumpHeight; // Hauteur du saut
     private int jumpCounter;
-    private double velocityY;  // Vitesse verticale
-    private final double gravity = 0.5; // Gravité constante
-    private final double jumpPower = 10;
-    private final int maxJumpHeight = 100;
 
     private Image[] walkRightFrames; // Images pour l'animation droite
     private Image[] walkLeftFrames;  // Images pour l'animation gauche
+    private Image[] jumpRightFrames;
+    private Image[] jumpLeftFrames;
     private ImageView playerView;
 
     public Player(double x, double y) {
         this.remainingLives = 3;
         this.coins = 0;
         this.points = 0;
-        this.floor = 500;
+        this.floor = (int) (550 - 85);
         this.isJumping = false;
         this.isFalling = false;
         this.jumpHeight = 5;
         this.jumpCounter = 0;
-        this.velocityY = 0;
 
         initializeImages();
-        initializePlayerView(x, y);
-        setLayoutX(x);
-        setLayoutY(y);
+        initializePlayerView(x, floor - 50);
     }
 
     private void initializeImages() {
@@ -56,6 +51,13 @@ public class Player extends Pane {
                     new Image(getClass().getResource("/images/player/marioLeft1Lvl1.png").toExternalForm()),
                     new Image(getClass().getResource("/images/player/marioLeft2Lvl1.png").toExternalForm()),
                     new Image(getClass().getResource("/images/player/marioLeft3Lvl1.png").toExternalForm())
+            };
+            jumpRightFrames = new Image[]{
+                    new Image(getClass().getResource("/images/player/marioRight4Lvl1.png").toExternalForm()),
+            };
+
+            jumpLeftFrames = new Image[]{
+                    new Image(getClass().getResource("/images/player/marioLeft4Lvl1.png").toExternalForm()),
             };
         } catch (Exception e) {
             System.err.println("Error loading images: " + e.getMessage());
@@ -74,17 +76,13 @@ public class Player extends Pane {
     }
 
     public void moveRight() {
-        velX = 5;
+        velX = 3;
         animateMovement(true);
     }
 
     public void moveLeft() {
-        velX = -5;
+        velX = -3;
         animateMovement(false);
-    }
-
-    public void moveUp() {
-        setLayoutY(getLayoutY() - 10); // Déplacement vertical vers le haut
     }
 
     private void animateMovement(boolean toRight) {
@@ -96,55 +94,68 @@ public class Player extends Pane {
         setLayoutX(getLayoutX() + velX);
     }
 
-    public void startJump() {
-        if (!isJumping && !isFalling) { // Saut uniquement si le joueur est au sol
+    public void jump() {
+        if (!isJumping && !isFalling) {
+            System.out.println("Jump triggered!");
             isJumping = true;
-            velocityY = -jumpPower; // Applique une vitesse initiale vers le haut
-        }
-    }
-
-    public void updateJump() {
-        if (isJumping || isFalling) {
-            velocityY += gravity;
-            setLayoutY(getLayoutY() + velocityY);
-
-            if (getLayoutY() >= floor) {
-                setLayoutY(floor);
-                isJumping = false;
-                isFalling = false;
-                velocityY = 0;
-            }
-
-            if (velocityY > 0) {
-                isJumping = false;
-                isFalling = true;
-            }
+            velY = -10; // Vitesse initiale pour le saut
+        } else {
+            System.out.println("Already jumping or falling");
         }
     }
 
     public void stopFalling(double groundY) {
+        System.out.println("Stopping falling");
         isFalling = false;
         isJumping = false;
         velY = 0;
         setLayoutY(groundY); // Positionner sur le sol
+
+        if (velX > 0) {
+            animateMovement(true); // Animation vers la droite
+        } else if (velX < 0) {
+            animateMovement(false); // Animation vers la gauche
+        } else {
+            playerView.setImage(walkRightFrames[0]); // Image par défaut
+        }
+
     }
 
-
-    public void jump() {
-            velocityY = -jumpPower;
-    }
 
     public void update() {
-        // Appliquer la gravité
-        velocityY += gravity;
-        setLayoutY(getLayoutY() + velocityY);
 
-        // Vérifier si le joueur touche le sol
-        if (getLayoutY() >= floor) {
-            setLayoutY(floor);
-            velocityY = 0; // Réinitialiser la vitesse verticale au sol
+        // Appliquer la gravité
+        velY += 0.5; // Gravité qui augmente la vitesse verticale
+        setLayoutY(getLayoutY() + velY);
+
+        // Gestion des sauts
+        if (isJumping) {
+            System.out.println("Jumping...");
+            animateJump(velX >= 0);
+            if (velY >= 0) { // Lorsque la vitesse devient positive, le joueur commence à tomber
+                isJumping = false;
+                isFalling = true;
+            }
         }
+
+        if (isFalling) {
+            System.out.println("Falling...");
+            animateJump(velX >= 0);
+        }
+
+        // Vérification des limites avec le sol
+        if (getLayoutY() >= floor) {
+            stopFalling(floor); // Arrêter la chute et repositionner le joueur au sol
+        }
+        // Mise à jour de la position horizontale
+        setLayoutX(getLayoutX() + velX);
+
     }
+    private void animateJump(boolean toRight) {
+        Image[] frames = toRight ? jumpRightFrames : jumpLeftFrames;
+        playerView.setImage(frames[0]); // Pour simplifier, on prend la première image de saut
+    }
+
 
     public void stop() {
         velX = 0; // Arrêter le mouvement horizontal
@@ -156,7 +167,6 @@ public class Player extends Pane {
             remainingLives--;
         }
     }
-
 
 
     public void acquireCoin() {
