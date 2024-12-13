@@ -1,14 +1,18 @@
 package com.devops.ninjava.model.enemy;
 
+import javafx.animation.PauseTransition;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.Pane;
+import javafx.util.Duration;
 
 public class Goomba extends Pane {
 
     private static final int WIDTH = 32;
     private static final int HEIGHT = 32;
     private static final double DEFAULT_SPEED = 2.0;
+
+    private boolean isDead = false;
 
     private double velX;
     private boolean movingLeft;
@@ -49,6 +53,8 @@ public class Goomba extends Pane {
 
     public void update() {
         // Mise à jour de la position horizontale
+        if (isDead) return; // Ne pas mettre à jour si le Goomba est mort
+
         if (movingLeft) {
             setLayoutX(getLayoutX() - velX);
         } else {
@@ -56,7 +62,7 @@ public class Goomba extends Pane {
         }
 
         // Logique pour inverser la direction si le Goomba atteint un bord
-        if (getLayoutX() <= 0 || getLayoutX() + WIDTH >= 800) { // Exemple de limites
+        if (getLayoutX() <= 0 || getLayoutX() + WIDTH >= 10000) { // Exemple de limites
             movingLeft = !movingLeft;
         }
 
@@ -77,4 +83,20 @@ public class Goomba extends Pane {
     public void setSpeed(double speed) {
         this.velX = speed;
     }
+
+    public void die() {
+        isDead = true;
+        goombaView.setImage(new Image(getClass().getResource("/images/enemy/enemyDead.png").toExternalForm()));
+
+        PauseTransition delay = new PauseTransition(Duration.seconds(2));
+        delay.setOnFinished(event -> this.setVisible(false));
+        delay.play();
+    }
+
+    public boolean isDead() {
+        return isDead;
+    }
+
+
+
 }
