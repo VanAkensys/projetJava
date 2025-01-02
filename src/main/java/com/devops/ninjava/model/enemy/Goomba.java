@@ -1,5 +1,9 @@
 package com.devops.ninjava.model.enemy;
 
+import com.devops.ninjava.model.decor.Brick;
+import com.devops.ninjava.model.decor.Pipe;
+import com.devops.ninjava.model.hero.FireBall;
+import com.devops.ninjava.model.hero.Player;
 import javafx.animation.PauseTransition;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
@@ -20,13 +24,17 @@ public class Goomba extends Pane {
     private ImageView goombaView;
     private int floor;
 
+    private static final double GRAVITY = 0.3; // Gravité appliquée au Goomba
+    private double velY = 0; // Vitesse verticale
+    private boolean isFalling = true;
+
     public Goomba(double x, double y) {
         this.velX = DEFAULT_SPEED;
         this.movingLeft = true;
         this.floor = (int) (550 - 85);
 
         initializeImages();
-        initializeGoombaView(x, floor + 15);
+        initializeGoombaView(x, y);
     }
 
     private void initializeImages() {
@@ -61,6 +69,19 @@ public class Goomba extends Pane {
             setLayoutX(getLayoutX() + velX);
         }
 
+        if (isFalling) {
+            velY += GRAVITY; // Augmenter la vitesse verticale avec la gravité
+            setLayoutY(getLayoutY() + velY);
+        }
+
+        // Détection des collisions avec le sol (ou d'autres objets)
+        if (getLayoutY() >= floor) { // Collision avec le sol
+            isFalling = false;
+            velY = 0; // Arrêter le mouvement vertical
+            setLayoutY(floor); // Positionner le Goomba sur le sol
+        } else {
+            isFalling = true; // Le Goomba est en train de tomber
+        }
         // Logique pour inverser la direction si le Goomba atteint un bord
         if (getLayoutX() <= 0 || getLayoutX() + WIDTH >= 10000) { // Exemple de limites
             movingLeft = !movingLeft;
@@ -75,10 +96,69 @@ public class Goomba extends Pane {
         goombaView.setImage(walkFrames[frameIndex]);
     }
 
-    public void onCollision() {
-        // Gestion de la collision, par exemple avec un joueur ou un objet
-        System.out.println("Goomba collided!");
+    public void onCollision(Pane object) {
+        if (object instanceof FireBall) {
+            handleFireBallCollision((FireBall) object);
+        } else if (object instanceof Brick) {
+            handleBrickCollision((Brick) object);
+        } else if (object instanceof Player) {
+            handlePlayerCollision((Player) object);
+        } else if (object instanceof Pipe) {
+            handlePipeCollision((Pipe) object);
+        }
     }
+
+    private void handleFireBallCollision(FireBall fireBall) {
+        if (fireBall.isActive()) {
+            die(); // Le Goomba meurt
+            fireBall.deactivate(); // La boule de feu disparaît
+            System.out.println("Goomba killed by FireBall!");
+        }
+    }
+
+    private void handleBrickCollision(Brick brick) {
+        if (this.getBoundsInParent().intersects(brick.getBoundsInParent())) {
+            // Bloquer le Goomba
+            if (movingLeft) {
+                movingLeft = false;
+                setLayoutX(getLayoutX() + 5); // Ajustement pour éviter la collision
+            } else {
+                movingLeft = true;
+                setLayoutX(getLayoutX() - 5);
+            }
+        }
+    }
+
+    private void handlePlayerCollision(Player player) {
+        if (this.getBoundsInParent().intersects(player.getBoundsInParent())) {
+            double goombaBottom = this.getLayoutY() + HEIGHT;
+            double playerTop = player.getLayoutY();
+
+            // Si le joueur saute sur le Goomba
+            if (playerTop < goombaBottom && player.getVelY() > 0) {
+                die(); // Le Goomba meurt
+                player.setVelY(-8); // Le joueur rebondit
+                System.out.println("Player jumped on Goomba!");
+            } else {
+                player.onTouchEnemy(); // Le joueur perd une vie
+                System.out.println("Goomba hit the Player!");
+            }
+        }
+    }
+
+    private void handlePipeCollision(Pipe pipe) {
+        if (this.getBoundsInParent().intersects(pipe.getBoundsInParent())) {
+            // Bloquer le Goomba
+            if (movingLeft) {
+                movingLeft = false;
+                setLayoutX(getLayoutX() + 5); // Ajustement pour éviter la collision
+            } else {
+                movingLeft = true;
+                setLayoutX(getLayoutX() - 5);
+            }
+        }
+    }
+
 
     public void setSpeed(double speed) {
         this.velX = speed;

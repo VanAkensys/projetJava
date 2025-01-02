@@ -1,10 +1,15 @@
 package com.devops.ninjava.manager;
 
 import com.devops.ninjava.model.Camera;
-import com.devops.ninjava.model.brick.Brick;
+import com.devops.ninjava.model.decor.Brick;
+import com.devops.ninjava.model.decor.Pipe;
+import com.devops.ninjava.model.enemy.Enemy;
 import com.devops.ninjava.model.enemy.Goomba;
 import com.devops.ninjava.model.hero.FireBall;
 import com.devops.ninjava.model.hero.Player;
+import com.devops.ninjava.model.hero.Projectile;
+import com.devops.ninjava.model.hero.Shuriken;
+import com.devops.ninjava.utils.MapLoader;
 import javafx.animation.AnimationTimer;
 import javafx.application.Application;
 import javafx.scene.Scene;
@@ -13,20 +18,22 @@ import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.Label;
 import javafx.scene.image.Image;
 import javafx.scene.layout.Pane;
-import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 import javafx.stage.Stage;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
 public class GameEngine extends Application  {
 
+
     private static final int WIDTH = 800;
     private static final int HEIGHT = 600;
-    private static final int WORLD_WIDTH = 2000; // Largeur du monde
+    private static final int WORLD_WIDTH = 20000; // Largeur du monde
     private static final int WORLD_HEIGHT = 600; // Hauteur du monde
-
 
 
     private boolean isRunning;
@@ -47,13 +54,18 @@ public class GameEngine extends Application  {
 
     //éléments du jeu
     private Player player;
-    private List<Goomba> goombas;
+    private List<Goomba> goombas = new ArrayList<>();
     private List<Goomba> goombasToRemove = new ArrayList<>();
     private List<FireBall> fireBalls = new ArrayList<>();
     private List<FireBall> fireBallsToRemove = new ArrayList<>();
+    private List<Projectile> projectiles = new ArrayList<>();
+    private List<Projectile> projectilesToRemove = new ArrayList<>();
     private List<Brick> bricks = new ArrayList<>();
     private List<Brick> toRemove = new ArrayList<>();
+    private List<Pipe> pipes = new ArrayList<>();
     private Camera camera;
+    private List<Enemy> enemies = new ArrayList<>();
+    private List<Enemy> enemiesToRemove = new ArrayList<>();
 
 
 
@@ -75,8 +87,10 @@ public class GameEngine extends Application  {
         root.getChildren().add(canvas);
 
         // Initialisation du joueur
-        player = new Player(100, 300);
+        player = new Player(100, 100);
         gameContainer.getChildren().add(player);
+
+
 
         // Initialisation du terrain
         loadBackground();
@@ -87,14 +101,19 @@ public class GameEngine extends Application  {
 
         // Afficher le score
         initializeScoreLabel();
-        initializeGoombas();
-        initializeBricks();
-        gameContainer.getChildren().addAll(goombas);
-        gameContainer.getChildren().addAll(bricks);
+
+//        initializeGoombas();
+//        initializeBricks();
+//        gameContainer.getChildren().addAll(goombas);
+//        gameContainer.getChildren().addAll(bricks);
+
         camera = new Camera(WIDTH, HEIGHT, WORLD_WIDTH, WORLD_HEIGHT);
-
         root.getChildren().addAll(backgroundContainer, gameContainer);
-
+        try {
+            MapLoader.loadMapFromFile("src/main/resources/images/map1.txt", gameContainer, bricks, enemies);
+        } catch (IOException e) {
+            System.err.println("Error loading map: " + e.getMessage());
+        }
 
         // Gestion des entrées utilisateur
         scene.setOnKeyPressed(event -> handleKeyPressed(event.getCode().toString()));
@@ -106,13 +125,14 @@ public class GameEngine extends Application  {
             public void handle(long now) {
                 if (isRunning && gameStatus == GameStatus.RUNNING) {
                     player.update(); // Mise à jour de l'état du joueur
-                    updateGoombas();
+//                    updateGoombas();
                     updateScore(); // Mise à jour du score
                     updateBricks();
                     updateFireballs();
                     updateCamera();
-
-
+                    updatePipes();
+                    updateProjectiles();
+                    updateEnemies();
                 }
             }
         };
@@ -125,82 +145,105 @@ public class GameEngine extends Application  {
         stage.show();
     }
 
-    private void initializeGoombas() {
-        goombas = new ArrayList<>();
-        for (int i = 0; i < 15; i++) { // Ajouter 3 Goombas pour l'exemple
-            Goomba goomba = new Goomba(200 + i * 150, 500); // Position initiale
-            goombas.add(goomba);
-            root.getChildren().add(goomba); // Ajouter le Goomba à l'interface
-        }
-    }
-
-    private void initializeBricks() {
-        bricks = new ArrayList<>();
-        for (int i = 0; i < 15; i++) { // Ajouter 5 briques pour l'exemple
-            Brick brick = new Brick(200 + i * 150, 500); // Position initiale
-            bricks.add(brick);
-            root.getChildren().add(brick); // Ajouter la brique à l'interface
-        }
-    }
-
     private void updateBricks() {
+        List<Brick> toRemove = new ArrayList<>(); // Liste temporaire pour supprimer les briques
+
         for (Brick brick : bricks) {
-            if (checkCollision(player, brick) && player.getVelY() < 0) { // Collision par le bas
-                brick.breakBrick(); // Appelle la méthode pour casser la brique
-                toRemove.add(brick);
-                player.setVelY(2); // Rebondir après avoir cassé la brique
+            player.handleCollision(brick); // Gestion de la collision dans la classe Player
+
+            if (brick.isBroken()) { // Si la brique est cassée
+                toRemove.add(brick); // Ajoute la brique à la liste de suppression
             }
         }
 
-        // Supprimer les briques cassées
+        // Supprime les briques cassées
         for (Brick brick : toRemove) {
-            root.getChildren().remove(brick); // Supprime la brique de l'affichage
-            bricks.remove(brick); // Supprime la brique de la liste
+            gameContainer.getChildren().remove(brick); // Retire la brique de l'affichage
+            bricks.remove(brick); // Retire la brique de la liste
         }
     }
 
-    private void updateGoombas() {
-        // Liste des Goombas à supprimer après la collision
-        List<Goomba> goombasToRemove = new ArrayList<>();
+    private void updatePipes() {
+        for (Pipe pipe : pipes) {
+            // Vérifier collision avec le joueur
+            if (pipe.collision(player)) {
+                player.handleCollision(pipe);
+            }
 
-        for (Goomba goomba : goombas) {
-            goomba.update(); // Mise à jour des Goombas
-
-            if (!goomba.isDead()) {
-                // Liste des boules de feu à supprimer après la collision
-                List<FireBall> fireBallsToRemove = new ArrayList<>();
-
-                // Collision avec une boule de feu
-                for (FireBall fireball : fireBalls) {
-                    if (checkCollision(goomba, fireball)) {
-                        goomba.die(); // Le Goomba meurt
-                        fireball.setVisible(false); // Marquer la boule de feu comme invisible
-                        fireBallsToRemove.add(fireball); // Ajouter à la liste des boules de feu à supprimer
-                    }
+            // Vérifier collision avec les Goombas
+            for (Goomba goomba : goombas) {
+                if (pipe.collision(goomba)) {
+                    goomba.onCollision(pipe);
                 }
-
-                // Supprimer les boules de feu qui ont touché ce Goomba
-                fireBalls.removeAll(fireBallsToRemove);
-                fireBallsToRemove.forEach(fireball -> gameContainer.getChildren().remove(fireball));
             }
 
-            // Si le Goomba est mort, l'ajouter à la liste des Goombas à supprimer
-            if (goomba.isDead()) {
-                goombasToRemove.add(goomba);
+            // Vérifier collision avec les boules de feu
+            for (FireBall fireball : fireBalls) {
+                if (pipe.collision(fireball)) {
+                    fireball.deactivate();
+                }
+            }
+        }
+    }
+
+    private void updateEnemies() {
+
+        for (Enemy enemy : enemies) {
+            enemy.update(); // Mise à jour de l'état de l'ennemi
+
+            // Vérifiez les collisions avec le joueur
+            enemy.handleCollision(player);
+
+            // Vérifiez les collisions avec les briques et tuyaux
+            for (Brick brick : bricks) {
+                enemy.handleCollision(brick);
+            }
+            for (Pipe pipe : pipes) {
+                enemy.handleCollision(pipe);
             }
 
-            // Collision avec le joueur (saut)
-            if (checkCollision(player, goomba) && player.getVelY() > 0) {
-                goomba.die();
-                player.setVelY(-8); // Rebondir après avoir tué un Goomba
-                goombasToRemove.add(goomba); // Ajouter à la liste des Goombas à supprimer
-
+            // Si l'ennemi est mort, ajoutez-le à la liste pour suppression
+            if (enemy.isDead()) {
+                enemiesToRemove.add(enemy);
             }
         }
 
-        goombas.removeAll(goombasToRemove);
-
+        // Supprimez les ennemis morts de la liste principale et de l'affichage
+        for (Enemy enemy : enemiesToRemove) {
+            enemies.remove(enemy); // Retire de la liste
+            gameContainer.getChildren().remove(enemy); // Retire de l'écran
+        }
     }
+
+
+//    private void updateGoombas()
+//    {
+//        for (Goomba goomba : goombas) {
+//            goomba.update(); // Mise à jour des Goombas
+//
+//            // Collision avec les tuyaux
+//            for (Pipe pipe : pipes) {
+//                if (pipe.collision(goomba)) {
+//                    goomba.onCollision(pipe); // Inverse la direction
+//                }
+//            }
+//            for (Brick brick : bricks) {
+//                goomba.onCollision(brick);
+//            }
+//
+//            // Vérifier la collision avec le joueur
+//            player.handleEnemyCollision(goomba);
+//
+//            // Supprimer les Goombas morts
+//            if (goomba.isDead()) {
+//                goombasToRemove.add(goomba);
+//            }
+//        }
+//
+//        // Supprimer les Goombas de la liste et de la scène
+//        goombas.removeAll(goombasToRemove);
+//        goombasToRemove.forEach(goomba -> gameContainer.getChildren().remove(goomba));
+//    }
 
     private void updateCamera() {
         // Calculer la position cible pour centrer la caméra sur le joueur
@@ -245,18 +288,83 @@ public class GameEngine extends Application  {
 
 
     private void updateFireballs() {
+        List<FireBall> fireBallsToRemove = new ArrayList<>();
+
         for (FireBall fireball : fireBalls) {
-            fireball.update(); // Mise à jour
-            // Supprimer les boules de feu hors limites du monde
-            if (fireball.getLayoutX() < 0 || fireball.getLayoutX() > WORLD_WIDTH) {
+            fireball.update(); // Mise à jour de la position
+
+            // Vérifier les collisions avec les briques
+            for (Brick brick : bricks) {
+                if (fireball.handleCollision(brick)) {
+                    fireBallsToRemove.add(fireball); // Marquer pour suppression
+                    break; // Pas besoin de vérifier d'autres collisions pour cette boule de feu
+                }
+            }
+
+            // Vérifier les collisions avec les Goombas
+            for (Enemy enemy : enemies) {
+                if (fireball.handleCollision(enemy)) {
+                    fireBallsToRemove.add(fireball); // Marquer pour suppression
+                    break; // Pas besoin de vérifier d'autres collisions pour cette boule de feu
+                }
+            }
+
+            // Supprimer les boules de feu hors limites
+            if (fireball.isOutOfBounds(WORLD_WIDTH)) {
                 fireBallsToRemove.add(fireball);
             }
         }
-        // Suppression des boules de feu inutilisées
-        fireBalls.removeAll(fireBallsToRemove);
-        fireBallsToRemove.forEach(fireball -> gameContainer.getChildren().remove(fireball));
-        fireBallsToRemove.clear();
+
+        // Supprimer les boules de feu inutilisées
+        for (FireBall fireball : fireBallsToRemove) {
+            fireBalls.remove(fireball);
+            gameContainer.getChildren().remove(fireball); // Retirer de l'interface graphique
+        }
     }
+
+    private void updateProjectiles() {
+        List<Projectile> projectilesToRemove = new ArrayList<>();
+
+        for (Projectile projectile : projectiles) {
+            projectile.update(); // Mise à jour de la position
+
+            // Vérifier les collisions avec les briques
+            for (Brick brick : bricks) {
+                if (projectile.handleCollision(brick)) {
+                    projectilesToRemove.add(projectile); // Marquer pour suppression
+                    break;
+                }
+            }
+
+            // Vérifier les collisions avec les tuyaux
+            for (Pipe pipe : pipes) {
+                if (projectile.handleCollision(pipe)) {
+                    projectilesToRemove.add(projectile); // Marquer pour suppression
+                    break;
+                }
+            }
+
+            // Vérifier les collisions avec les Goombas
+            for (Enemy enemy : enemies) {
+                if (projectile.handleCollision(enemy)) {
+                    projectilesToRemove.add(projectile); // Marquer pour suppression
+                    break;
+                }
+            }
+
+            // Supprimer les projectiles hors limites
+            if (projectile.getLayoutX() < 0 || projectile.getLayoutX() > WORLD_WIDTH) {
+                projectilesToRemove.add(projectile);
+            }
+        }
+
+        // Supprimer les projectiles inutilisés
+//        for (Projectile projectile : projectilesToRemove) {
+//            projectiles.remove(projectile);
+//            gameContainer.getChildren().remove(projectile); // Retirer de l'affichage
+//        }
+    }
+
 
     private void fireBallAction() {
         Image fireballImage = new Image(getClass().getResource("/images/powerUp/fireball.png").toExternalForm());
@@ -268,6 +376,28 @@ public class GameEngine extends Application  {
         );
         fireBalls.add(fireball);
         gameContainer.getChildren().add(fireball);
+    }
+
+    private void launchShuriken() {
+        if (!player.isAttacking()) { // Empêcher de lancer plusieurs shurikens en même temps
+            player.animateProjectileLaunch(); // Animer le lancement du shuriken
+
+            BufferedImage spriteSheet = null;
+            try {
+                spriteSheet = ImageIO.read(getClass().getResource("/images/player/Ultimate_Ninja_Spritesheet.png"));
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+            Shuriken shuriken = new Shuriken(
+                    player.getX() + (player.getVelX() >= 0 ? 48 : -24), // Position de départ
+                    player.getY() + 24, // Position de départ
+                    player.getVelX() >= 0 || player.getScaleX() > 0, // Direction
+                    spriteSheet
+            );
+
+            projectiles.add(shuriken); // Ajouter à la liste des projectiles
+            gameContainer.getChildren().add(shuriken); // Ajouter au conteneur
+        }
     }
 
 
@@ -318,7 +448,11 @@ public class GameEngine extends Application  {
                 System.out.println("jump");
             }
             case "SPACE" -> {
-                fireBallAction();
+                player.attack();
+            }
+            case "W" -> {
+                launchShuriken(); // Lancer un shuriken
+                System.out.println("Shuriken launched!");
             }
             case "P" -> togglePauseResume(); // Pause/Resume
             default -> System.out.println("Unhandled key: " + keyCode);
@@ -378,7 +512,7 @@ public class GameEngine extends Application  {
                 gameStatus = GameStatus.START_SCREEN;
                 isRunning = false; // Retour à l'écran de démarrage
             }
-            case FIRE -> {
+            case ATTACK -> {
             }
             default -> {
                 // Aucune action à gérer

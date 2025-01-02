@@ -1,8 +1,4 @@
-package com.devops.ninjava.model.brick;
-
-import javafx.scene.image.Image;
-import javafx.scene.image.ImageView;
-import javafx.scene.layout.Pane;
+package com.devops.ninjava.model.decor;
 
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
@@ -21,7 +17,7 @@ public class Brick extends Pane {
         this.floor = (int) (575 - 225); // Position de base sur le sol
 
         initializeImages();
-        initializeBrickView(x, floor + 15); // Initialisation de la vue de la brique
+        initializeBrickView(x, y); // Initialisation de la vue de la brique
     }
 
     private void initializeImages() {

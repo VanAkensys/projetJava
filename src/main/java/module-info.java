@@ -10,7 +10,7 @@ module com.devops.ninjava {
     requires org.kordamp.bootstrapfx.core;
     requires eu.hansolo.tilesfx;
     requires com.almasb.fxgl.all;
-    requires java.desktop;
+    requires javafx.swing;
 
     opens com.devops.ninjava to javafx.fxml;
     exports com.devops.ninjava;

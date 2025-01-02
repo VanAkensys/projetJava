@@ -39,7 +39,7 @@ public class InputManager {
             else
                 currentAction = ButtonAction.GO_TO_START_SCREEN;
         } else if (keyCode == KeyCode.SPACE) {
-            currentAction = ButtonAction.FIRE;
+            currentAction = ButtonAction.ATTACK;
         }
 
         notifyInput(currentAction);
