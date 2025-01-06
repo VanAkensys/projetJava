@@ -1,9 +1,8 @@
-package com.devops.ninjava.model.hero;
+package com.devops.ninjava.model.projectile;
 
-import com.devops.ninjava.model.decor.Brick;
-import com.devops.ninjava.model.decor.Pipe;
+import com.devops.ninjava.model.decor.Ground;
 import com.devops.ninjava.model.enemy.Enemy;
-import com.devops.ninjava.model.enemy.Goomba;
+import com.devops.ninjava.model.hero.Player;
 import javafx.embed.swing.SwingFXUtils;
 import javafx.scene.image.Image;
 import javafx.scene.layout.Pane;
@@ -18,16 +17,23 @@ public class Shuriken extends Projectile {
     private int animationIndex = 0;  // Index de l'animation
     private boolean isImpacting = false; // Indique si le shuriken est en phase d'impact
     private int impactIndex = 0;
+    private final int damage = 10;
 
     private int frameCounter = 0; // Compteur pour ralentir l'animation
 
+    private boolean isEnemyShuriken; // Indique si le shuriken provient d'un ennemi
     private Rectangle hitbox;
+    private int collisionDelay = 10;
 
-    public Shuriken(double x, double y, boolean toRight, BufferedImage spriteSheet) {
+    public Shuriken(double x, double y, boolean toRight, BufferedImage spriteSheet, boolean isEnemyShuriken) {
         super(x, y, toRight, SwingFXUtils.toFXImage(spriteSheet.getSubimage(5 * 48, 0 * 48, 48, 48), null));
 
-        this.hitbox = new Rectangle(48, 48, 48, 48); // Par exemple, une hitbox plus petite
+        this.isEnemyShuriken = isEnemyShuriken;
+
+        this.hitbox = new Rectangle(12, 12, 12, 12); // Par exemple, une hitbox plus petite
         this.getChildren().add(hitbox); // (Optionnel) Ajoute visuellement la hitbox pour le debug
+        this.hitbox.setX(x); // Position ajustée pour centrer la hitbox
+        this.hitbox.setY(y);
         hitbox.setVisible(false);
 
         // Initialisation des frames pour l'animation
@@ -57,12 +63,19 @@ public class Shuriken extends Projectile {
         if (isImpacting) {
             playImpactAnimation();
         } else {
-            // Déplacer le shuriken
-            setLayoutX(getLayoutX() + velX);
-            hitbox.setX(getLayoutX()); // Mettre à jour la position X de la hitbox
-            hitbox.setY(getLayoutY()); // Mettre à jour la position Y de la hitbox
-
+            setLayoutX(getLayoutX() + velX); // Déplacer le shuriken
             playTrajectoryAnimation();
+
+            hitbox.setX(getLayoutX()); // Ajustez selon la taille réelle de la hitbox
+            hitbox.setY(getLayoutY());
+
+
+            // Réduire le délai de collision
+            if (collisionDelay > 0) {
+                collisionDelay--;
+            } else {
+                checkCollision(); // Vérifier les collisions seulement après le délai
+            }
         }
     }
 
@@ -86,23 +99,43 @@ public class Shuriken extends Projectile {
         frameCounter++;
     }
 
+    private void checkCollision() {
+        if (getParent() == null) return;
+
+        getParent().getChildrenUnmodifiable().forEach(node -> {
+            if (node instanceof Ground) {
+                if (collisionDelay <= 0 && hitbox.getBoundsInParent().intersects(node.getBoundsInParent())) {
+                    System.out.println("Collision détectée avec un décor.");
+                    startImpactAnimation();
+                }
+            } else if (isEnemyShuriken && node instanceof Player) {
+                Player player = (Player) node;
+                if (hitbox.getBoundsInParent().intersects(player.getBoundsInParent()) && !player.isInvincible()) {
+                    System.out.println("Collision détectée avec le joueur.");
+                    player.onTouchEnemy();
+                    startImpactAnimation();
+                }
+            } else if (!isEnemyShuriken && node instanceof Enemy) {
+                Enemy enemy = (Enemy) node;
+                if (hitbox.getBoundsInParent().intersects(enemy.getBoundsInParent())) {
+                    System.out.println("Collision détectée avec un ennemi.");
+                    enemy.takeDamage(damage);
+                    startImpactAnimation();
+                }
+            }
+        });
+    }
+
     @Override
     public boolean handleCollision(Pane object) {
-        if (!isActive) return false;
-
-        // Vérifiez les collisions avec la hitbox au lieu de l'image complète
-        if (object.getBoundsInParent().intersects(hitbox.getBoundsInParent())) {
-            if (object instanceof Brick || object instanceof Pipe) {
-                startImpactAnimation();
-                return true;
-            } else if (object instanceof Enemy) {
-                ((Enemy) object).die(); // Tuer le Goomba
-                startImpactAnimation();
-                return true;
-            }
+        // Gérer les collisions spécifiques si besoin
+        if (isActive && this.getBoundsInParent().intersects(object.getBoundsInParent())) {
+            deactivate();
+            return true;
         }
         return false;
     }
+
     private void startImpactAnimation() {
         isImpacting = true;
         impactIndex = 0;

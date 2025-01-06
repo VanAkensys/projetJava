@@ -1,11 +1,7 @@
 package com.devops.ninjava.utils;
 
-import com.devops.ninjava.model.decor.Brick;
-import com.devops.ninjava.model.decor.Pipe;
-import com.devops.ninjava.model.enemy.Enemy;
-import com.devops.ninjava.model.enemy.Enemy1;
-import com.devops.ninjava.model.enemy.Goomba;
-import javafx.scene.image.Image;
+import com.devops.ninjava.model.decor.Ground;
+import com.devops.ninjava.model.enemy.*;
 import javafx.scene.layout.Pane;
 
 import java.io.IOException;
@@ -17,7 +13,7 @@ public class MapLoader {
 
     private static final int TILE_SIZE = 32; // Taille d'une tuile
 
-    public static void loadMapFromFile(String filePath, Pane gameContainer, List<Brick> bricks, List<Enemy> enemies) throws IOException {
+    public static void loadMapFromFile(String filePath, Pane gameContainer, List<Ground> grounds, List<Enemy> enemies) throws IOException {
         List<String> lines = Files.readAllLines(Paths.get(filePath));
 
         for (int row = 0; row < lines.size(); row++) {
@@ -27,17 +23,42 @@ public class MapLoader {
 
                 switch (tileType) {
                     case '2': // Sol ou brique
-                        Brick brick = new Brick(col * TILE_SIZE, row * TILE_SIZE);
-                        bricks.add(brick);
-                        gameContainer.getChildren().add(brick);
+                        Ground ground = new Ground(col * TILE_SIZE, row * TILE_SIZE);
+                        grounds.add(ground);
+                        gameContainer.getChildren().add(ground);
                         break;
 
                     case '3': // Enemy1
-                        Enemy1 enemy1 = new Enemy1(col * TILE_SIZE, row * TILE_SIZE - TILE_SIZE);
+                        FighterEnemy enemy1 = new FighterEnemy(col * TILE_SIZE, row * TILE_SIZE - TILE_SIZE);
                         enemies.add(enemy1);
                         gameContainer.getChildren().add(enemy1);
                         break;
-                    // Vous pouvez ajouter d'autres types de tiles ici
+                    case '4': // Enemy2
+                        MissileEnemy enemy2 = new MissileEnemy(col * TILE_SIZE, row * TILE_SIZE - TILE_SIZE);
+                        enemies.add(enemy2);
+                        gameContainer.getChildren().add(enemy2);
+                        break;
+                    case '5': // Enemy3
+                        ShieldEnemy enemy3 = new ShieldEnemy(col * TILE_SIZE, row * TILE_SIZE - TILE_SIZE);
+                        enemies.add(enemy3);
+                        gameContainer.getChildren().add(enemy3);
+                        break;
+
+                    case '6': // Enemy4
+                        BomberEnemy enemy4 = new BomberEnemy(col * TILE_SIZE, row * TILE_SIZE - TILE_SIZE);
+                        enemies.add(enemy4);
+                        gameContainer.getChildren().add(enemy4);
+                        break;
+                    case '7': // Enemy5
+                        ShurikenEnemy enemy5 = new ShurikenEnemy(col * TILE_SIZE, row * TILE_SIZE - TILE_SIZE);
+                        enemies.add(enemy5);
+                        gameContainer.getChildren().add(enemy5);
+                        break;
+                    case 'B': // BossEnemy
+                        BossEnemy bossEnemy = new BossEnemy(col * TILE_SIZE, row * TILE_SIZE - TILE_SIZE);
+                        enemies.add(bossEnemy);
+                        gameContainer.getChildren().add(bossEnemy);
+                        break;
                 }
             }
         }

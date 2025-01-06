@@ -1,8 +1,7 @@
-package com.devops.ninjava.model.hero;
+package com.devops.ninjava.model.projectile;
 
-import com.devops.ninjava.model.decor.Brick;
-import com.devops.ninjava.model.decor.Pipe;
-import com.devops.ninjava.model.enemy.Goomba;
+import com.devops.ninjava.model.decor.Ground;
+import com.devops.ninjava.model.enemy.Enemy;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.Pane;
@@ -15,6 +14,7 @@ public class FireBall extends Pane {
     private double velX; // Vitesse horizontale
     private double velY; // Vitesse verticale
     private final double gravity = 0.3; // Gravité pour faire descendre la boule de feu
+    private final int damage = 10;
 
     private ImageView fireBallView;
     private boolean isActive;
@@ -43,10 +43,6 @@ public class FireBall extends Pane {
         velY += gravity; // Appliquer la gravité
         setLayoutY(getLayoutY() + velY);
 
-        // Vérifier si la boule de feu touche le sol
-        if (getLayoutY() >= 500) { // 500 est un exemple de hauteur de sol
-            velY = -Math.abs(velY) * 0.6; // Rebondir avec une vitesse réduite
-        }
     }
 
     public boolean handleCollision(Pane object) {
@@ -54,33 +50,31 @@ public class FireBall extends Pane {
             return false;
         }
 
-        if (object instanceof Brick) {
-            return handleBrickCollision((Brick) object);
-        } else if (object instanceof Goomba) {
-            handleGoombaCollision((Goomba) object);
+        if (object instanceof Ground) {
+            return handleBrickCollision((Ground) object);
+        } else if (object instanceof Enemy) {
+            handleEnemyCollision((Enemy) object);
             return true;
-        } else if (object instanceof Pipe) {
-            return handlePipeCollision((Pipe) object);
         }
 
         return false;
     }
 
-    private boolean handleBrickCollision(Brick brick) {
+    private boolean handleBrickCollision(Ground ground) {
         double fireBallBottom = this.getLayoutY() + HEIGHT;
         double fireBallTop = this.getLayoutY();
         double fireBallRight = this.getLayoutX() + WIDTH;
         double fireBallLeft = this.getLayoutX();
 
-        double brickBottom = brick.getLayoutY() + brick.getHeight();
-        double brickTop = brick.getLayoutY();
-        double brickRight = brick.getLayoutX() + brick.getWidth();
-        double brickLeft = brick.getLayoutX();
+        double brickBottom = ground.getLayoutY() + ground.getHeight();
+        double brickTop = ground.getLayoutY();
+        double brickRight = ground.getLayoutX() + ground.getWidth();
+        double brickLeft = ground.getLayoutX();
 
         // Collision par le dessus
         if (fireBallBottom > brickTop && fireBallTop < brickTop &&
                 fireBallRight > brickLeft && fireBallLeft < brickRight) {
-            velY = -Math.abs(velY) * 0.8; // Rebondir avec une vitesse réduite
+            velY = -Math.abs(velY) * 0.9; // Rebondir avec une vitesse réduite
             return false; // Ne désactive pas la boule de feu
         }
 
@@ -89,31 +83,9 @@ public class FireBall extends Pane {
         return true;
     }
 
-    private boolean handlePipeCollision(Pipe pipe) {
-        double fireBallBottom = this.getLayoutY() + HEIGHT;
-        double fireBallTop = this.getLayoutY();
-        double fireBallRight = this.getLayoutX() + WIDTH;
-        double fireBallLeft = this.getLayoutX();
 
-        double pipeBottom = pipe.getLayoutY() + pipe.getHeight();
-        double pipeTop = pipe.getLayoutY();
-        double pipeRight = pipe.getLayoutX() + pipe.getWidth();
-        double pipeLeft = pipe.getLayoutX();
-
-        // Collision par le dessus
-        if (fireBallBottom > pipeTop && fireBallTop < pipeTop &&
-                fireBallRight > pipeLeft && fireBallLeft < pipeRight) {
-            velY = -Math.abs(velY) * 0.8; // Rebondir avec une vitesse réduite
-            return false; // Ne désactive pas la boule de feu
-        }
-
-        // Autres collisions : Désactiver la boule de feu
-        deactivate();
-        return true;
-    }
-
-    private void handleGoombaCollision(Goomba goomba) {
-        goomba.die(); // Tuer le Goomba
+    private void handleEnemyCollision(Enemy enemy) {
+        enemy.takeDamage(damage); // Tuer le Goomba
         deactivate(); // Désactiver la boule de feu
     }
 

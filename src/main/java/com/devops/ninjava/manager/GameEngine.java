@@ -1,29 +1,33 @@
 package com.devops.ninjava.manager;
 
 import com.devops.ninjava.model.Camera;
-import com.devops.ninjava.model.decor.Brick;
-import com.devops.ninjava.model.decor.Pipe;
+import com.devops.ninjava.model.decor.Ground;
 import com.devops.ninjava.model.enemy.Enemy;
-import com.devops.ninjava.model.enemy.Goomba;
-import com.devops.ninjava.model.hero.FireBall;
+import com.devops.ninjava.model.projectile.FireBall;
 import com.devops.ninjava.model.hero.Player;
-import com.devops.ninjava.model.hero.Projectile;
-import com.devops.ninjava.model.hero.Shuriken;
+import com.devops.ninjava.model.projectile.Projectile;
+import com.devops.ninjava.model.projectile.Shuriken;
 import com.devops.ninjava.utils.MapLoader;
 import javafx.animation.AnimationTimer;
 import javafx.application.Application;
+import javafx.embed.swing.SwingFXUtils;
 import javafx.scene.Scene;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.Label;
 import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
 import javafx.scene.layout.Pane;
 import javafx.scene.shape.Rectangle;
+import javafx.scene.text.Font;
 import javafx.stage.Stage;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.net.URL;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -47,27 +51,34 @@ public class GameEngine extends Application  {
     private Pane root;
     private Rectangle ground;
     private Label scoreLabel;
+    private Label livesLabel;
+    private Label shurikenLabel;
+    private Label energyLabel;
+    private Image shurikenIcon;
     private double backgroundX = 0; // Position horizontale du background
     private Image background;
+    private Font menuFont;
+    private Stage primaryStage;
+
+    private Pane pauseMenu;
+    private Label continueLabel;
+    private Label exitLabel;
+    private int selectedOption = 0;
+
 
     private Canvas canvas;
 
     //éléments du jeu
     private Player player;
-    private List<Goomba> goombas = new ArrayList<>();
-    private List<Goomba> goombasToRemove = new ArrayList<>();
     private List<FireBall> fireBalls = new ArrayList<>();
     private List<FireBall> fireBallsToRemove = new ArrayList<>();
     private List<Projectile> projectiles = new ArrayList<>();
     private List<Projectile> projectilesToRemove = new ArrayList<>();
-    private List<Brick> bricks = new ArrayList<>();
-    private List<Brick> toRemove = new ArrayList<>();
-    private List<Pipe> pipes = new ArrayList<>();
+    private List<Ground> grounds = new ArrayList<>();
+    private List<Ground> toRemove = new ArrayList<>();
     private Camera camera;
     private List<Enemy> enemies = new ArrayList<>();
     private List<Enemy> enemiesToRemove = new ArrayList<>();
-
-
 
 
 
@@ -78,6 +89,11 @@ public class GameEngine extends Application  {
         // Initialisation de la scène et du conteneur principal
         root = new Pane();
         Scene scene = new Scene(root, WIDTH, HEIGHT);
+
+        stage.setFullScreen(true);
+        stage.setFullScreenExitHint(""); // Optionnel : désactive le message de sortie du plein écran
+        stage.setFullScreenExitKeyCombination(null);
+        stage.setResizable(false); // Empêche la redimensionnement de la fenêtre
 
         backgroundContainer = new Pane();
         gameContainer = new Pane();
@@ -91,7 +107,6 @@ public class GameEngine extends Application  {
         gameContainer.getChildren().add(player);
 
 
-
         // Initialisation du terrain
         loadBackground();
         drawInitialBackground();
@@ -100,17 +115,16 @@ public class GameEngine extends Application  {
         gameStatus = GameStatus.RUNNING;
 
         // Afficher le score
-        initializeScoreLabel();
 
-//        initializeGoombas();
-//        initializeBricks();
-//        gameContainer.getChildren().addAll(goombas);
-//        gameContainer.getChildren().addAll(bricks);
+        initializeScoreLabel();
+        initializePauseMenu();
+
+        this.primaryStage = stage;
 
         camera = new Camera(WIDTH, HEIGHT, WORLD_WIDTH, WORLD_HEIGHT);
         root.getChildren().addAll(backgroundContainer, gameContainer);
         try {
-            MapLoader.loadMapFromFile("src/main/resources/images/map1.txt", gameContainer, bricks, enemies);
+            MapLoader.loadMapFromFile("src/main/resources/images/map1.txt", gameContainer, grounds, enemies);
         } catch (IOException e) {
             System.err.println("Error loading map: " + e.getMessage());
         }
@@ -119,18 +133,27 @@ public class GameEngine extends Application  {
         scene.setOnKeyPressed(event -> handleKeyPressed(event.getCode().toString()));
         scene.setOnKeyReleased(event -> handleKeyReleased(event.getCode().toString()));
 
+        // Liez la taille du Canvas à celle de la scène
+        canvas.widthProperty().bind(scene.widthProperty());
+        canvas.heightProperty().bind(scene.heightProperty());
+
+        // Listener pour détecter les changements de taille de la fenêtre
+        stage.widthProperty().addListener((observable, oldValue, newValue) -> drawBackground());
+        stage.heightProperty().addListener((observable, oldValue, newValue) -> drawBackground());
+
         // Boucle de jeu
         AnimationTimer gameLoop = new AnimationTimer() {
             @Override
             public void handle(long now) {
-                if (isRunning && gameStatus == GameStatus.RUNNING) {
+                if (isRunning && gameStatus == GameStatus.RUNNING && !player.isDead()) {
                     player.update(); // Mise à jour de l'état du joueur
-//                    updateGoombas();
+                    drawBackground();
+                    updateLives();
                     updateScore(); // Mise à jour du score
+                    updateEnergy();
                     updateBricks();
                     updateFireballs();
                     updateCamera();
-                    updatePipes();
                     updateProjectiles();
                     updateEnemies();
                 }
@@ -145,61 +168,93 @@ public class GameEngine extends Application  {
         stage.show();
     }
 
+    private void initializePauseMenu() {
+        // Chargement de la police utilisée dans le score
+        URL fontResource = getClass().getResource("/font/gameFont.ttf");
+        if (fontResource == null) {
+            throw new RuntimeException("Font file not found! Check the path: /font/gameFont.ttf");
+        }
+
+        try {
+            String decodedFontPath = URLDecoder.decode(fontResource.toExternalForm(), StandardCharsets.UTF_8);
+            menuFont = Font.loadFont(decodedFontPath, 30); // Taille adaptée au menu
+            if (menuFont == null) {
+                throw new RuntimeException("Failed to load font for the pause menu.");
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw new RuntimeException("Error loading font for the pause menu: " + e.getMessage());
+        }
+
+        // Création du menu
+        pauseMenu = new Pane();
+        pauseMenu.setPrefSize(WIDTH, HEIGHT);
+        pauseMenu.setStyle("-fx-background-color: rgba(0, 0, 0, 0.7);");
+
+        continueLabel = new Label("Continue");
+        exitLabel = new Label("Exit");
+
+        continueLabel.setLayoutX(WIDTH / 2.0 - 80);
+        continueLabel.setLayoutY(HEIGHT / 2.0 - 50);
+
+        exitLabel.setLayoutX(WIDTH / 2.0 - 80);
+        exitLabel.setLayoutY(HEIGHT / 2.0 + 10);
+
+        continueLabel.setFont(menuFont);
+        exitLabel.setFont(menuFont);
+
+        continueLabel.setStyle("-fx-text-fill: white;");
+        exitLabel.setStyle("-fx-text-fill: white;");
+
+        pauseMenu.getChildren().addAll(continueLabel, exitLabel);
+        pauseMenu.setVisible(false); // Masquer par défaut
+
+        root.getChildren().add(pauseMenu);
+    }
+
+    private void updateMenuSelection() {
+        if (selectedOption == 0) {
+            continueLabel.setStyle("-fx-text-fill: yellow; -fx-effect: dropshadow(gaussian, black, 2, 0.7, 0, 0);");
+            exitLabel.setStyle("-fx-text-fill: white; -fx-effect: dropshadow(gaussian, black, 2, 0.7, 0, 0);");
+        } else {
+            continueLabel.setStyle("-fx-text-fill: white; -fx-effect: dropshadow(gaussian, black, 2, 0.7, 0, 0);");
+            exitLabel.setStyle("-fx-text-fill: yellow; -fx-effect: dropshadow(gaussian, black, 2, 0.7, 0, 0);");
+        }
+    }
+
     private void updateBricks() {
-        List<Brick> toRemove = new ArrayList<>(); // Liste temporaire pour supprimer les briques
+        List<Ground> toRemove = new ArrayList<>(); // Liste temporaire pour supprimer les briques
 
-        for (Brick brick : bricks) {
-            player.handleCollision(brick); // Gestion de la collision dans la classe Player
+        for (Ground ground : grounds) {
+            player.handleCollision(ground); // Gestion de la collision dans la classe Player
 
-            if (brick.isBroken()) { // Si la brique est cassée
-                toRemove.add(brick); // Ajoute la brique à la liste de suppression
+            if (ground.isBroken()) { // Si la brique est cassée
+                toRemove.add(ground); // Ajoute la brique à la liste de suppression
             }
         }
 
         // Supprime les briques cassées
-        for (Brick brick : toRemove) {
-            gameContainer.getChildren().remove(brick); // Retire la brique de l'affichage
-            bricks.remove(brick); // Retire la brique de la liste
+        for (Ground ground : toRemove) {
+            gameContainer.getChildren().remove(ground); // Retire la brique de l'affichage
+            grounds.remove(ground); // Retire la brique de la liste
         }
     }
 
-    private void updatePipes() {
-        for (Pipe pipe : pipes) {
-            // Vérifier collision avec le joueur
-            if (pipe.collision(player)) {
-                player.handleCollision(pipe);
-            }
 
-            // Vérifier collision avec les Goombas
-            for (Goomba goomba : goombas) {
-                if (pipe.collision(goomba)) {
-                    goomba.onCollision(pipe);
-                }
-            }
-
-            // Vérifier collision avec les boules de feu
-            for (FireBall fireball : fireBalls) {
-                if (pipe.collision(fireball)) {
-                    fireball.deactivate();
-                }
-            }
-        }
-    }
 
     private void updateEnemies() {
 
         for (Enemy enemy : enemies) {
             enemy.update(); // Mise à jour de l'état de l'ennemi
 
+            player.handleEnemyCollision(enemy);
+
             // Vérifiez les collisions avec le joueur
             enemy.handleCollision(player);
 
             // Vérifiez les collisions avec les briques et tuyaux
-            for (Brick brick : bricks) {
-                enemy.handleCollision(brick);
-            }
-            for (Pipe pipe : pipes) {
-                enemy.handleCollision(pipe);
+            for (Ground ground : grounds) {
+                enemy.handleCollision(ground);
             }
 
             // Si l'ennemi est mort, ajoutez-le à la liste pour suppression
@@ -215,36 +270,6 @@ public class GameEngine extends Application  {
         }
     }
 
-
-//    private void updateGoombas()
-//    {
-//        for (Goomba goomba : goombas) {
-//            goomba.update(); // Mise à jour des Goombas
-//
-//            // Collision avec les tuyaux
-//            for (Pipe pipe : pipes) {
-//                if (pipe.collision(goomba)) {
-//                    goomba.onCollision(pipe); // Inverse la direction
-//                }
-//            }
-//            for (Brick brick : bricks) {
-//                goomba.onCollision(brick);
-//            }
-//
-//            // Vérifier la collision avec le joueur
-//            player.handleEnemyCollision(goomba);
-//
-//            // Supprimer les Goombas morts
-//            if (goomba.isDead()) {
-//                goombasToRemove.add(goomba);
-//            }
-//        }
-//
-//        // Supprimer les Goombas de la liste et de la scène
-//        goombas.removeAll(goombasToRemove);
-//        goombasToRemove.forEach(goomba -> gameContainer.getChildren().remove(goomba));
-//    }
-
     private void updateCamera() {
         // Calculer la position cible pour centrer la caméra sur le joueur
         double offsetX = player.getLayoutX() - WIDTH / 2.0;
@@ -257,12 +282,15 @@ public class GameEngine extends Application  {
         // Déplacer le conteneur du jeu
         gameContainer.setLayoutX(-offsetX);
         gameContainer.setLayoutY(-offsetY);
+
+        // Mise à jour du background pour suivre la caméra
+        updateBackground(offsetX, offsetY);
     }
 
     private void drawInitialBackground() {
         GraphicsContext gc = canvas.getGraphicsContext2D();
         if (background != null) {
-            gc.drawImage(background, 0, 0, WIDTH, HEIGHT); // Dessine le fond à la taille de la scène
+            gc.drawImage(background, 0, 0, canvas.getWidth(), canvas.getHeight()); // Dessine le fond à la taille de la scène
         } else {
             System.out.println("Background image is null!");
         }
@@ -270,7 +298,7 @@ public class GameEngine extends Application  {
 
     private void loadBackground() {
         try {
-            background = new Image(getClass().getResource("/images/background.png").toExternalForm());
+            background = new Image(getClass().getResource("/images/city.png").toExternalForm());
             System.out.println("Background loaded successfully.");
         } catch (Exception e) {
             System.err.println("Error loading background image: " + e.getMessage());
@@ -278,14 +306,90 @@ public class GameEngine extends Application  {
         }
     }
 
-    private void initializeScoreLabel() {
-        scoreLabel = new Label("Score: 0");
-        scoreLabel.setLayoutX(10);
-        scoreLabel.setLayoutY(10);
-        scoreLabel.setStyle("-fx-font-size: 16px; -fx-text-fill: white;");
-        root.getChildren().add(scoreLabel);
+    private void drawBackground() {
+        GraphicsContext gc = canvas.getGraphicsContext2D();
+
+        // Effacez l'ancien contenu
+        gc.clearRect(0, 0, canvas.getWidth(), canvas.getHeight());
+
+        if (background != null) {
+            // Dessiner le background pour couvrir toute la scène
+            gc.drawImage(background, 0, 0, canvas.getWidth(), canvas.getHeight());
+        } else {
+            System.out.println("Background image is null!");
+        }
     }
 
+    private void initializeScoreLabel() {
+        URL fontResource = getClass().getResource("/font/gameFont.ttf");
+        if (fontResource == null) {
+            throw new RuntimeException("Font file not found! Check the path: /font/gameFont.ttf");
+        }
+
+        try {
+            // Décodage du chemin (supprime %20)
+            String decodedFontPath = URLDecoder.decode(fontResource.toExternalForm(), StandardCharsets.UTF_8);
+
+            // Chargement de la police
+            Font pixelFont = Font.loadFont(decodedFontPath, 20);
+            if (pixelFont == null) {
+                throw new RuntimeException("Failed to load font from: " + decodedFontPath);
+            }
+
+            // Configurez le label du score
+            scoreLabel = new Label("Score: 0");
+            scoreLabel.setLayoutX(10);
+            scoreLabel.setLayoutY(10);
+            scoreLabel.setFont(pixelFont); // Appliquez la police
+            scoreLabel.setStyle("-fx-text-fill: white; -fx-effect: dropshadow(gaussian, black, 2, 0.7, 0, 0);");
+
+            livesLabel = new Label("Lives: " + player.getRemainingLives());
+            livesLabel.setLayoutX(10);
+            livesLabel.setLayoutY(40); // Position sous le score
+            livesLabel.setFont(pixelFont);
+            livesLabel.setStyle("-fx-text-fill: white; -fx-effect: dropshadow(gaussian, black, 2, 0.7, 0, 0);");
+
+            energyLabel = new Label("Energy: " + player.getEnergy());
+            energyLabel.setLayoutX(10); // Position du label
+            energyLabel.setLayoutY(70); // Position sous les vies et shurikens
+            energyLabel.setFont(scoreLabel.getFont()); // Réutiliser la police
+            energyLabel.setStyle("-fx-text-fill: white; -fx-effect: dropshadow(gaussian, black, 2, 0.7, 0, 0);");
+
+            root.getChildren().addAll(scoreLabel, livesLabel, energyLabel);
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw new RuntimeException("Error loading font: " + e.getMessage());
+        }
+
+        try {
+            BufferedImage spriteSheet = ImageIO.read(getClass().getResource("/images/player/Ultimate_Ninja_Spritesheet.png"));
+            Image shurikenImage = convertToFXImage(spriteSheet.getSubimage(6 * 48, 0 * 48, 48, 48)); // Découpe le shuriken
+
+            ImageView shurikenImageView = new ImageView(shurikenImage);
+
+            shurikenImageView.setFitWidth(96); // Taille de l'icône
+            shurikenImageView.setFitHeight(96);
+
+            shurikenLabel = new Label(" x " + player.getShurikens(), shurikenImageView);
+            shurikenLabel.setLayoutX(10);
+            shurikenLabel.setLayoutY(80); // Position sous le label des vies
+            shurikenLabel.setFont(scoreLabel.getFont());
+            shurikenLabel.setStyle("-fx-text-fill: white; -fx-effect: dropshadow(gaussian, black, 2, 0.7, 0, 0);");
+
+            root.getChildren().add(shurikenLabel);
+        } catch (Exception e) {
+            e.printStackTrace();
+            throw new RuntimeException("Error loading shuriken icon: " + e.getMessage());
+        }
+    }
+
+    private Image convertToFXImage(BufferedImage bufferedImage) {
+        return SwingFXUtils.toFXImage(bufferedImage, null);
+    }
+
+    private void updateLives() {
+        livesLabel.setText("Lives: " + player.getRemainingLives());
+    }
 
     private void updateFireballs() {
         List<FireBall> fireBallsToRemove = new ArrayList<>();
@@ -294,8 +398,8 @@ public class GameEngine extends Application  {
             fireball.update(); // Mise à jour de la position
 
             // Vérifier les collisions avec les briques
-            for (Brick brick : bricks) {
-                if (fireball.handleCollision(brick)) {
+            for (Ground ground : grounds) {
+                if (fireball.handleCollision(ground)) {
                     fireBallsToRemove.add(fireball); // Marquer pour suppression
                     break; // Pas besoin de vérifier d'autres collisions pour cette boule de feu
                 }
@@ -326,60 +430,40 @@ public class GameEngine extends Application  {
         List<Projectile> projectilesToRemove = new ArrayList<>();
 
         for (Projectile projectile : projectiles) {
-            projectile.update(); // Mise à jour de la position
+            projectile.update(); // Appelle la méthode update du projectile, incluant checkCollision()
 
-            // Vérifier les collisions avec les briques
-            for (Brick brick : bricks) {
-                if (projectile.handleCollision(brick)) {
-                    projectilesToRemove.add(projectile); // Marquer pour suppression
-                    break;
-                }
-            }
-
-            // Vérifier les collisions avec les tuyaux
-            for (Pipe pipe : pipes) {
-                if (projectile.handleCollision(pipe)) {
-                    projectilesToRemove.add(projectile); // Marquer pour suppression
-                    break;
-                }
-            }
-
-            // Vérifier les collisions avec les Goombas
-            for (Enemy enemy : enemies) {
-                if (projectile.handleCollision(enemy)) {
-                    projectilesToRemove.add(projectile); // Marquer pour suppression
-                    break;
-                }
-            }
-
-            // Supprimer les projectiles hors limites
-            if (projectile.getLayoutX() < 0 || projectile.getLayoutX() > WORLD_WIDTH) {
+            if (!projectile.isActive()) {
                 projectilesToRemove.add(projectile);
             }
         }
 
-        // Supprimer les projectiles inutilisés
-//        for (Projectile projectile : projectilesToRemove) {
-//            projectiles.remove(projectile);
-//            gameContainer.getChildren().remove(projectile); // Retirer de l'affichage
-//        }
+        // Retirer les projectiles désactivés
+        for (Projectile projectile : projectilesToRemove) {
+            projectiles.remove(projectile);
+            gameContainer.getChildren().remove(projectile); // Retirer de la scène
+        }
     }
 
 
     private void fireBallAction() {
-        Image fireballImage = new Image(getClass().getResource("/images/powerUp/fireball.png").toExternalForm());
-        FireBall fireball = new FireBall(
-                player.getX() + (player.getVelX() >= 0 ? 48 : -24),
-                player.getY() + 24,
-                player.getVelX() >= 0,
-                fireballImage
-        );
-        fireBalls.add(fireball);
-        gameContainer.getChildren().add(fireball);
+        if (!player.isAttacking() && player.useEnergy(player.ENERGY_COST_FIREBALL)) {
+            player.animateJutsuLaunch();
+            Image fireballImage = new Image(getClass().getResource("/images/powerUp/fireball.png").toExternalForm());
+            FireBall fireball = new FireBall(
+                    player.getX() + (player.getVelX() >= 0 ? 48 : -24),
+                    player.getY() + 24,
+                    player.getVelX() >= 0,
+                    fireballImage
+            );
+            fireBalls.add(fireball);
+            gameContainer.getChildren().add(fireball);
+        }else {
+            System.out.println("Not enough energy to launch a fireball!");
+        }
     }
 
     private void launchShuriken() {
-        if (!player.isAttacking()) { // Empêcher de lancer plusieurs shurikens en même temps
+        if (!player.isAttacking() && player.useShuriken()) { // Empêcher de lancer plusieurs shurikens en même temps
             player.animateProjectileLaunch(); // Animer le lancement du shuriken
 
             BufferedImage spriteSheet = null;
@@ -390,47 +474,55 @@ public class GameEngine extends Application  {
             }
             Shuriken shuriken = new Shuriken(
                     player.getX() + (player.getVelX() >= 0 ? 48 : -24), // Position de départ
-                    player.getY() + 24, // Position de départ
+                    player.getY() + 16, // Position de départ
                     player.getVelX() >= 0 || player.getScaleX() > 0, // Direction
-                    spriteSheet
+                    spriteSheet,
+                    false
             );
+
+            updateShurikens();
 
             projectiles.add(shuriken); // Ajouter à la liste des projectiles
             gameContainer.getChildren().add(shuriken); // Ajouter au conteneur
         }
     }
 
-
-
-    private void updateBackground() {
-        GraphicsContext gc = canvas.getGraphicsContext2D();
-
-        // Effacer l'ancien frame
-        gc.clearRect(0, 0, WIDTH, HEIGHT);
-
-        // Dessiner le fond à la position actuelle
-        gc.drawImage(background, backgroundX, 0);
-
-        // Si le background sort de l'écran, le dessiner à nouveau pour un effet de boucle
-        if (backgroundX + background.getWidth() < WIDTH) {
-            gc.drawImage(background, backgroundX + background.getWidth(), 0);
-        }
-
-        // Mise à jour de la position du background
-        if (player.getX() >= 700) {
-            player.setX(700 - player.getVelX()); // Empêcher le joueur de dépasser cette limite
-            backgroundX -= player.getVelX(); // Déplacer le background
-
-            // Réinitialiser si le fond dépasse ses limites
-            if (backgroundX <= -background.getWidth()) {
-                backgroundX = 0;
-            }
-        }
+    private void updateShurikens() {
+        shurikenLabel.setText(" x " + player.getShurikens());
     }
 
-    // Exemple de logique simple pour gérer les collisions
-    private boolean checkCollision(Pane a, Pane b) {
-        return a.getBoundsInParent().intersects(b.getBoundsInParent());
+    public void updateEnergy() {
+        player.regenerateEnergy(); // Régénérer l'énergie
+        energyLabel.setText("Energy: " + player.getEnergy()); // Mettre à jour l'affichage de l'énergie
+    }
+
+    private void updateBackground(double offsetX, double offsetY) {
+        GraphicsContext gc = canvas.getGraphicsContext2D();
+
+        // Effacez l'ancien contenu
+        gc.clearRect(0, 0, canvas.getWidth(), canvas.getHeight());
+
+        // Ajustez la position du background en fonction de la caméra
+        double bgOffsetX = -offsetX % background.getWidth();
+        double bgOffsetY = -offsetY % background.getHeight();
+
+        // Dessinez le background en fonction de son décalage
+        gc.drawImage(background, bgOffsetX, bgOffsetY, canvas.getWidth(), canvas.getHeight());
+
+        // Boucle horizontale du background
+        if (bgOffsetX + background.getWidth() < canvas.getWidth()) {
+            gc.drawImage(background, bgOffsetX + background.getWidth(), bgOffsetY, canvas.getWidth(), canvas.getHeight());
+        }
+
+        // Boucle verticale du background
+        if (bgOffsetY + background.getHeight() < canvas.getHeight()) {
+            gc.drawImage(background, bgOffsetX, bgOffsetY + background.getHeight(), canvas.getWidth(), canvas.getHeight());
+        }
+
+        // Boucle diagonale
+        if (bgOffsetX + background.getWidth() < canvas.getWidth() && bgOffsetY + background.getHeight() < canvas.getHeight()) {
+            gc.drawImage(background, bgOffsetX + background.getWidth(), bgOffsetY + background.getHeight(), canvas.getWidth(), canvas.getHeight());
+        }
     }
 
     private void updateScore() {
@@ -439,29 +531,47 @@ public class GameEngine extends Application  {
 
     // Réception des actions utilisateur
     private void handleKeyPressed(String keyCode) {
-        switch (keyCode) {
-            case "RIGHT" -> player.moveRight(); // Déplacement à droite
-            case "LEFT" -> player.moveLeft(); // Déplacement à gauche
-            case "UP" -> {
-                player.jump(); // Saut
-                player.update();
-                System.out.println("jump");
+        if(gameStatus == GameStatus.RUNNING && !player.isDead()) {
+            switch (keyCode) {
+                case "RIGHT" -> player.moveRight(); // Déplacement à droite
+                case "LEFT" -> player.moveLeft(); // Déplacement à gauche
+                case "UP" -> {
+                    player.jump(); // Saut
+                    player.update();
+                    System.out.println("jump");
+                }
+                case "DOWN" -> {
+                    if (!player.isInvincible())
+                    {
+                        player.startTeleportation();
+                    }
+
+                }
+                case "SPACE" -> {
+                    if (!player.isAttacking())
+                    {
+                        player.attack();
+                    }
+                }
+                case "W" -> {
+                    launchShuriken(); // Lancer un shuriken
+                    System.out.println("Shuriken launched!");
+                }
+                case "X" -> {
+                    fireBallAction(); // Lancer un shuriken
+                    System.out.println("fireBall launched!");
+                }
+                case "ESCAPE" -> togglePauseMenu(); // Affiche ou masque le menu de pause
+                default -> System.out.println("Unhandled key: " + keyCode);
             }
-            case "SPACE" -> {
-                player.attack();
-            }
-            case "W" -> {
-                launchShuriken(); // Lancer un shuriken
-                System.out.println("Shuriken launched!");
-            }
-            case "P" -> togglePauseResume(); // Pause/Resume
-            default -> System.out.println("Unhandled key: " + keyCode);
+        }else if (gameStatus == GameStatus.PAUSED) {
+            handlePauseMenuNavigation(keyCode);
         }
     }
 
     private void handleKeyReleased(String keyCode) {
         switch (keyCode) {
-            case "RIGHT", "LEFT" -> player.stop(); // Arrêt des déplacements horizontaux
+            case "RIGHT", "LEFT" -> player.stopMoving(); // Arrêt des déplacements horizontaux
             default -> {
                 // Aucune action spécifique
             }
@@ -480,6 +590,43 @@ public class GameEngine extends Application  {
 
     public GameStatus getGameStatus() {
         return gameStatus;
+    }
+
+    private void handlePauseMenuNavigation(String keyCode) {
+        switch (keyCode) {
+            case "UP" -> {
+                selectedOption = (selectedOption - 1 + 2) % 2; // Navigation circulaire
+                updateMenuSelection();
+            }
+            case "DOWN" -> {
+                selectedOption = (selectedOption + 1) % 2; // Navigation circulaire
+                updateMenuSelection();
+            }
+            case "ENTER" -> {
+                if (selectedOption == 0) { // Continue
+                    togglePauseMenu();
+                } else if (selectedOption == 1) { // Exit
+                    System.exit(0); // Quitter le jeu
+                }
+            }
+        }
+    }
+
+    private void togglePauseMenu() {
+        if (gameStatus == GameStatus.PAUSED) {
+            pauseMenu.setVisible(false);
+            gameStatus = GameStatus.RUNNING;
+            isRunning = true;
+
+            // Remettre en plein écran lorsque le jeu reprend
+            if (primaryStage != null && !primaryStage.isFullScreen()) {
+                primaryStage.setFullScreen(true);
+            }
+        } else {
+            pauseMenu.setVisible(true);
+            gameStatus = GameStatus.PAUSED;
+            isRunning = false;
+        }
     }
 
     public void receiveInput(ButtonAction input) {

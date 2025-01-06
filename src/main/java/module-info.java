@@ -17,4 +17,5 @@ module com.devops.ninjava {
     exports com.devops.ninjava.manager;
 
     opens com.devops.ninjava.model.hero to javafx.fxml;
+    opens com.devops.ninjava.model.projectile to javafx.fxml;
 }

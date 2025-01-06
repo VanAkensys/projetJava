@@ -1,0 +1,20 @@
+The aimed native resolution these graphics are aimed for are:
+320x180 px (1/6th of full HD)
+480x270 (272) px (1/4th of full HD)
+
+if you need more information on resolutions here is a chart:
+https://www.deviantart.com/cyangmou/art/Pixel-Gameart-101-06-Pixelart-Screen-Resolution-688071910
+
+Most of the animations are created with having a basic framerate of 10 - 16 fps in mind (that's 60ms - 100ms per frame)
+The gal files are set to a speed of 60 ms / frame
+
+the chest should be looped in the idle until it opens.
+the last opened frame is meant to be hold once it's opened.
+
+The gravestone can be used either as environment object or as enemy.
+If used as enemy, the tremblinc can be displayed once the player is near or if the tombstone gets alive.
+It's meant to simply jump from left to right with the jump animation.
+if the player destroys it, the particles should be used.
+
+Graphics Gale can be downloaded for free here:
+https://graphicsgale.com/us/

@@ -1,10 +1,14 @@
 package com.devops.ninjava.model.decor;
 
+import javafx.embed.swing.SwingFXUtils;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.Pane;
 
-public class Brick extends Pane {
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+
+public class Ground extends Pane {
 
     private static final int WIDTH = 32;
     private static final int HEIGHT = 32;
@@ -13,7 +17,7 @@ public class Brick extends Pane {
     private int floor;
     private boolean isBroken;
 
-    public Brick(double x, double y) {
+    public Ground(double x, double y) {
         this.floor = (int) (575 - 225); // Position de base sur le sol
 
         initializeImages();
@@ -23,7 +27,8 @@ public class Brick extends Pane {
     private void initializeImages() {
         try {
             // Initialiser l'Image et assigner à ImageView
-            Image brickImage = new Image(getClass().getResource("/images/wall/wall.png").toExternalForm());
+            BufferedImage spriteSheet = ImageIO.read(getClass().getResource("/images/map/tileset/Tileset1.png"));
+            Image brickImage = SwingFXUtils.toFXImage(spriteSheet.getSubimage(0, 112, 32, 32), null);
             brickView = new ImageView(brickImage);
         } catch (Exception e) {
             System.err.println("Erreur lors du chargement de l'image : " + e.getMessage());

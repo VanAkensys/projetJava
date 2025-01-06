@@ -7,18 +7,24 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 
-public class Enemy1 extends Enemy {
+public class FighterEnemy extends Enemy {
 
     private Image[] walkFrames; // Frames pour l'animation de déplacement
     private int frameCounter = 0;
     private static final int ANIMATION_DELAY = 10; // Délai entre les frames
     private static final double DEFAULT_SPEED = 2.0;
+    private static final double MAX_DISTANCE = 100.0;
+    private final double initialX;
 
-    public Enemy1(double x, double y) {
+    public FighterEnemy(double x, double y) {
         super(x, y, 48, 48); // Taille des frames : 32x32
         this.velX = DEFAULT_SPEED;
+        this.initialX = x;
+        this.health = 200;      // Santé spécifique au boss
+        this.maxHealth = 200;
         loadSprites();
     }
+
 
     private void loadSprites() {
         try {
@@ -43,13 +49,14 @@ public class Enemy1 extends Enemy {
     public void update() {
         if (isDead) return;
 
-        // Déplacement horizontal
-        setLayoutX(getLayoutX() + velX);
-
-        // Inversion de direction aux bords
-        if (getLayoutX() <= 0 || getLayoutX() + getWidth() >= 20000) { // Ajuster les limites
-            velX = -velX;
+        double currentX = getLayoutX();
+        if (currentX <= initialX - MAX_DISTANCE || currentX >= initialX + MAX_DISTANCE) {
+            velX = -velX; // Inverser la direction
         }
+        // Déplacement horizontal
+        setLayoutX(currentX + velX);
+
+        applyGravity();
 
         // Animation de déplacement
         if (frameCounter % ANIMATION_DELAY == 0) {
@@ -57,5 +64,10 @@ public class Enemy1 extends Enemy {
             setImageViewFrame(walkFrames[frameIndex]);
         }
         frameCounter++;
+    }
+
+    public void die() {
+        isDead = true;
+        this.setVisible(false); // Masquer l'ennemi après la mort
     }
 }
