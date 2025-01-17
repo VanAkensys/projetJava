@@ -1,6 +1,8 @@
 package com.devops.ninjava.utils;
 
+import com.devops.ninjava.model.decor.GrassGround;
 import com.devops.ninjava.model.decor.Ground;
+import com.devops.ninjava.model.decor.InteriorGround;
 import com.devops.ninjava.model.enemy.*;
 import javafx.scene.layout.Pane;
 
@@ -22,10 +24,15 @@ public class MapLoader {
                 char tileType = line.charAt(col);
 
                 switch (tileType) {
+                    case 'I': // Sol ou brique
+                        InteriorGround interiorGround = new InteriorGround(col * TILE_SIZE, row * TILE_SIZE);
+                        grounds.add(interiorGround);
+                        gameContainer.getChildren().add(interiorGround);
+                        break;
                     case '2': // Sol ou brique
-                        Ground ground = new Ground(col * TILE_SIZE, row * TILE_SIZE);
-                        grounds.add(ground);
-                        gameContainer.getChildren().add(ground);
+                        GrassGround grassGround = new GrassGround(col * TILE_SIZE, row * TILE_SIZE);
+                        grounds.add(grassGround);
+                        gameContainer.getChildren().add(grassGround);
                         break;
 
                     case '3': // Enemy1

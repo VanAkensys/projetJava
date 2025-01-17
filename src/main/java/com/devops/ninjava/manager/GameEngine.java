@@ -10,6 +10,7 @@ import com.devops.ninjava.model.projectile.Shuriken;
 import com.devops.ninjava.utils.MapLoader;
 import javafx.animation.AnimationTimer;
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.embed.swing.SwingFXUtils;
 import javafx.scene.Scene;
 import javafx.scene.canvas.Canvas;
@@ -24,9 +25,14 @@ import javafx.stage.Stage;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.net.Socket;
 import java.net.URL;
 import java.net.URLDecoder;
+import java.nio.Buffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -37,7 +43,7 @@ public class GameEngine extends Application  {
     private static final int WIDTH = 800;
     private static final int HEIGHT = 600;
     private static final int WORLD_WIDTH = 20000; // Largeur du monde
-    private static final int WORLD_HEIGHT = 600; // Hauteur du monde
+    private static final int WORLD_HEIGHT = 5000; // Hauteur du monde
 
 
     private boolean isRunning;
@@ -70,6 +76,7 @@ public class GameEngine extends Application  {
 
     //éléments du jeu
     private Player player;
+    private Player player2;
     private List<FireBall> fireBalls = new ArrayList<>();
     private List<FireBall> fireBallsToRemove = new ArrayList<>();
     private List<Projectile> projectiles = new ArrayList<>();
@@ -79,6 +86,14 @@ public class GameEngine extends Application  {
     private Camera camera;
     private List<Enemy> enemies = new ArrayList<>();
     private List<Enemy> enemiesToRemove = new ArrayList<>();
+
+    private PrintWriter serverOut;
+    private boolean isPlayer1 = true;
+    private boolean isPlayer2Connected = false;
+    private static final String SERVER_ADDRESS = "localhost";
+    private static final int PORT = 3303;
+    private boolean isMultiplayer = true; // Détermine si le jeu est en mode multijoueur
+    private boolean bothPlayersConnected = false;
 
 
 
@@ -90,7 +105,9 @@ public class GameEngine extends Application  {
         root = new Pane();
         Scene scene = new Scene(root, WIDTH, HEIGHT);
 
-        stage.setFullScreen(true);
+        gameStatus = GameStatus.WAITING_FOR_PLAYER;
+
+        stage.setFullScreen(false);
         stage.setFullScreenExitHint(""); // Optionnel : désactive le message de sortie du plein écran
         stage.setFullScreenExitKeyCombination(null);
         stage.setResizable(false); // Empêche la redimensionnement de la fenêtre
@@ -106,13 +123,22 @@ public class GameEngine extends Application  {
         player = new Player(100, 100);
         gameContainer.getChildren().add(player);
 
+        if (isMultiplayer) {
+            connectToServer();
+            initializePlayer2();
+            if (!bothPlayersConnected) {
+                System.out.println("Waiting for both players to connect...");
+            }
+        } else
+        {
+            bothPlayersConnected = true;
+        }
 
         // Initialisation du terrain
         loadBackground();
         drawInitialBackground();
 
         // Initialisation de l'état du jeu
-        gameStatus = GameStatus.RUNNING;
 
         // Afficher le score
 
@@ -142,30 +168,56 @@ public class GameEngine extends Application  {
         stage.heightProperty().addListener((observable, oldValue, newValue) -> drawBackground());
 
         // Boucle de jeu
+        gameStatus = GameStatus.RUNNING;
         AnimationTimer gameLoop = new AnimationTimer() {
             @Override
             public void handle(long now) {
-                if (isRunning && gameStatus == GameStatus.RUNNING && !player.isDead()) {
-                    player.update(); // Mise à jour de l'état du joueur
+                if (isRunning && gameStatus == GameStatus.RUNNING && bothPlayersConnected) {
+                    if (!player.isDead()) {
+                        player.update();
+                        updateEnergy(getActivePlayer());
+                        updateLives(getActivePlayer());
+                        updateScore(getActivePlayer());
+                        updateCamera(getActivePlayer());
+                        updateShurikens(getActivePlayer());
+                    }
+                    if (isMultiplayer && bothPlayersConnected && !player2.isDead()) {
+                        player2.update();
+                        updateEnergy(getActivePlayer());
+                        updateLives(getActivePlayer());
+                        updateScore(getActivePlayer());
+                        updateCamera(getActivePlayer());
+                        updateShurikens(getActivePlayer());
+                    }
                     drawBackground();
-                    updateLives();
-                    updateScore(); // Mise à jour du score
-                    updateEnergy();
+
                     updateBricks();
                     updateFireballs();
-                    updateCamera();
                     updateProjectiles();
                     updateEnemies();
+                }else {
+                    System.out.println("Waiting for players");
                 }
             }
         };
         // Démarrage du jeu
         gameLoop.start();
-        isRunning = true;
+        isRunning =true;
+
 
         stage.setScene(scene);
         stage.setTitle("Advanced Game Engine");
         stage.show();
+    }
+
+
+    private void initializePlayer2() {
+        if (!isPlayer2Connected) {
+            player2 = new Player(200, 100); // Position initiale
+            gameContainer.getChildren().add(player2);
+            isPlayer2Connected = true;
+            System.out.println("Player 2 initialized and added to the game.");
+        }
     }
 
     private void initializePauseMenu() {
@@ -227,6 +279,11 @@ public class GameEngine extends Application  {
 
         for (Ground ground : grounds) {
             player.handleCollision(ground); // Gestion de la collision dans la classe Player
+            if (isMultiplayer)
+            {
+                player2.handleCollision(ground);
+            }
+
 
             if (ground.isBroken()) { // Si la brique est cassée
                 toRemove.add(ground); // Ajoute la brique à la liste de suppression
@@ -248,6 +305,11 @@ public class GameEngine extends Application  {
             enemy.update(); // Mise à jour de l'état de l'ennemi
 
             player.handleEnemyCollision(enemy);
+            if (isMultiplayer)
+            {
+                player2.handleEnemyCollision(enemy);
+                enemy.handleCollision(player2);
+            }
 
             // Vérifiez les collisions avec le joueur
             enemy.handleCollision(player);
@@ -270,14 +332,16 @@ public class GameEngine extends Application  {
         }
     }
 
-    private void updateCamera() {
-        // Calculer la position cible pour centrer la caméra sur le joueur
-        double offsetX = player.getLayoutX() - WIDTH / 2.0;
-        double offsetY = player.getLayoutY() - HEIGHT / 2.0;
+    private void updateCamera(Player activePlayer) {
 
-        // Limiter le décalage pour que le joueur ne sorte pas des limites du monde
-        offsetX = Math.max(0, Math.min(offsetX, WORLD_WIDTH - WIDTH));
-        offsetY = Math.max(0, Math.min(offsetY, WORLD_HEIGHT - HEIGHT));
+        // Calculer la position cible pour centrer la caméra sur le joueur
+        double offsetX = activePlayer.getLayoutX() - WIDTH / 2.0;
+        double offsetY = activePlayer.getLayoutY() - HEIGHT / 2.0;
+
+        if (activePlayer.getLayoutX() > WORLD_WIDTH || activePlayer.getLayoutY() > WORLD_HEIGHT) {
+            activePlayer.die();
+            return;
+        }
 
         // Déplacer le conteneur du jeu
         gameContainer.setLayoutX(-offsetX);
@@ -387,8 +451,8 @@ public class GameEngine extends Application  {
         return SwingFXUtils.toFXImage(bufferedImage, null);
     }
 
-    private void updateLives() {
-        livesLabel.setText("Lives: " + player.getRemainingLives());
+    private void updateLives(Player activePlayer) {
+        livesLabel.setText("Lives: " + activePlayer.getRemainingLives());
     }
 
     private void updateFireballs() {
@@ -427,6 +491,7 @@ public class GameEngine extends Application  {
     }
 
     private void updateProjectiles() {
+
         List<Projectile> projectilesToRemove = new ArrayList<>();
 
         for (Projectile projectile : projectiles) {
@@ -445,26 +510,33 @@ public class GameEngine extends Application  {
     }
 
 
-    private void fireBallAction() {
-        if (!player.isAttacking() && player.useEnergy(player.ENERGY_COST_FIREBALL)) {
-            player.animateJutsuLaunch();
+    private void fireBallAction(Player activePlayer) {
+        if (!activePlayer.isAttacking() && activePlayer.useEnergy(activePlayer.ENERGY_COST_FIREBALL)) {
+            activePlayer.animateJutsuLaunch();
+
+            // Charger l'image de la fireball
             Image fireballImage = new Image(getClass().getResource("/images/powerUp/fireball.png").toExternalForm());
+
+            // Créer une nouvelle fireball à la position du joueur
             FireBall fireball = new FireBall(
-                    player.getX() + (player.getVelX() >= 0 ? 48 : -24),
-                    player.getY() + 24,
-                    player.getVelX() >= 0,
+                    activePlayer.getX() + (activePlayer.getVelX() >= 0 ? 48 : -24), // Position basée sur la direction
+                    activePlayer.getY() + 24, // Position ajustée pour être au niveau de la main
+                    activePlayer.getVelX() >= 0, // Direction de la fireball
                     fireballImage
             );
+
+            // Ajouter la fireball à la liste et à la scène
             fireBalls.add(fireball);
             gameContainer.getChildren().add(fireball);
-        }else {
+
+        } else {
             System.out.println("Not enough energy to launch a fireball!");
         }
     }
 
-    private void launchShuriken() {
-        if (!player.isAttacking() && player.useShuriken()) { // Empêcher de lancer plusieurs shurikens en même temps
-            player.animateProjectileLaunch(); // Animer le lancement du shuriken
+    private void launchShuriken(Player activePlayer) {
+        if (!activePlayer.isAttacking() && activePlayer.useShuriken()) { // Empêcher de lancer plusieurs shurikens en même temps
+            activePlayer.animateProjectileLaunch(); // Animer le lancement du shuriken
 
             BufferedImage spriteSheet = null;
             try {
@@ -473,27 +545,25 @@ public class GameEngine extends Application  {
                 throw new RuntimeException(e);
             }
             Shuriken shuriken = new Shuriken(
-                    player.getX() + (player.getVelX() >= 0 ? 48 : -24), // Position de départ
-                    player.getY() + 16, // Position de départ
-                    player.getVelX() >= 0 || player.getScaleX() > 0, // Direction
+                    activePlayer.getX() + (activePlayer.getVelX() >= 0 ? 48 : -24), // Position de départ
+                    activePlayer.getY() + 16, // Position de départ
+                    activePlayer.getVelX() >= 0 || activePlayer.getScaleX() > 0, // Direction
                     spriteSheet,
                     false
             );
-
-            updateShurikens();
 
             projectiles.add(shuriken); // Ajouter à la liste des projectiles
             gameContainer.getChildren().add(shuriken); // Ajouter au conteneur
         }
     }
 
-    private void updateShurikens() {
-        shurikenLabel.setText(" x " + player.getShurikens());
+    private void updateShurikens(Player activePlayer) {
+        shurikenLabel.setText(" x " + activePlayer.getShurikens());
     }
 
-    public void updateEnergy() {
-        player.regenerateEnergy(); // Régénérer l'énergie
-        energyLabel.setText("Energy: " + player.getEnergy()); // Mettre à jour l'affichage de l'énergie
+    public void updateEnergy(Player activePlayer) {
+        activePlayer.regenerateEnergy(); // Régénérer l'énergie
+        energyLabel.setText("Energy: " + activePlayer.getEnergy()); // Mettre à jour l'affichage de l'énergie
     }
 
     private void updateBackground(double offsetX, double offsetY) {
@@ -525,43 +595,78 @@ public class GameEngine extends Application  {
         }
     }
 
-    private void updateScore() {
-        scoreLabel.setText("Score: " + player.getPoints());
+    private void updateScore(Player activePlayer) {
+        scoreLabel.setText("Score: " + activePlayer.getPoints());
     }
 
     // Réception des actions utilisateur
     private void handleKeyPressed(String keyCode) {
         if(gameStatus == GameStatus.RUNNING && !player.isDead()) {
             switch (keyCode) {
-                case "RIGHT" -> player.moveRight(); // Déplacement à droite
-                case "LEFT" -> player.moveLeft(); // Déplacement à gauche
+                case "RIGHT" -> {
+                    if (isPlayer1) {
+                        player.moveRight();
+                        sendActionToServer("PLAYER1_MOVE_RIGHT");
+                    } else {
+                        player2.moveRight();
+                        sendActionToServer("PLAYER2_MOVE_RIGHT");
+                    }
+                }
+                case "LEFT" -> {
+                    if (isPlayer1) {
+                        player.moveLeft();
+                        sendActionToServer("PLAYER1_MOVE_LEFT");
+                    } else {
+                        player2.moveLeft();
+                        sendActionToServer("PLAYER2_MOVE_LEFT");
+                    }
+                }
                 case "UP" -> {
-                    player.jump(); // Saut
-                    player.update();
-                    System.out.println("jump");
+                    if (isPlayer1) {
+                        player.jump();
+                        sendActionToServer("PLAYER1_JUMP");
+                    } else {
+                        player2.jump();
+                        sendActionToServer("PLAYER2_JUMP");
+                    }
                 }
                 case "DOWN" -> {
-                    if (!player.isInvincible())
-                    {
+                    if (isPlayer1 && !player.isInvincible()) {
                         player.startTeleportation();
+                        sendActionToServer("PLAYER1_TELEPORT");
+                    } else if (!isPlayer1 && !player2.isInvincible()) {
+                        player2.startTeleportation();
+                        sendActionToServer("PLAYER2_TELEPORT");
                     }
-
                 }
                 case "SPACE" -> {
-                    if (!player.isAttacking())
-                    {
+                    if (isPlayer1 && !player.isAttacking()) {
                         player.attack();
+                        sendActionToServer("PLAYER1_ATTACK");
+                    } else if (!isPlayer1 && !player2.isAttacking()) {
+                        player2.attack();
+                        sendActionToServer("PLAYER2_ATTACK");
                     }
                 }
                 case "W" -> {
-                    launchShuriken(); // Lancer un shuriken
-                    System.out.println("Shuriken launched!");
+                    if (isPlayer1) {
+                        launchShuriken(player);
+                        sendActionToServer("PLAYER1_LAUNCH_SHURIKEN");
+                    } else {
+                        launchShuriken(player2);
+                        sendActionToServer("PLAYER2_LAUNCH_SHURIKEN");
+                    }
                 }
                 case "X" -> {
-                    fireBallAction(); // Lancer un shuriken
-                    System.out.println("fireBall launched!");
+                    if (isPlayer1) {
+                        fireBallAction(player);
+                        sendActionToServer("PLAYER1_LAUNCH_FIREBALL");
+                    } else {
+                        fireBallAction(player2);
+                        sendActionToServer("PLAYER2_LAUNCH_FIREBALL");
+                    }
                 }
-                case "ESCAPE" -> togglePauseMenu(); // Affiche ou masque le menu de pause
+                case "ESCAPE" -> sendActionToServer("PAUSE_GAME");
                 default -> System.out.println("Unhandled key: " + keyCode);
             }
         }else if (gameStatus == GameStatus.PAUSED) {
@@ -571,7 +676,16 @@ public class GameEngine extends Application  {
 
     private void handleKeyReleased(String keyCode) {
         switch (keyCode) {
-            case "RIGHT", "LEFT" -> player.stopMoving(); // Arrêt des déplacements horizontaux
+            case "RIGHT", "LEFT" ->
+                    {
+                        if (isPlayer1) {
+                            player.stopMoving();
+                            sendActionToServer("PLAYER1_STOP");
+                        } else {
+                            player2.stopMoving();
+                            sendActionToServer("PLAYER2_STOP");
+                        }
+                    } // Arrêt des déplacements horizontaux
             default -> {
                 // Aucune action spécifique
             }
@@ -604,9 +718,10 @@ public class GameEngine extends Application  {
             }
             case "ENTER" -> {
                 if (selectedOption == 0) { // Continue
-                    togglePauseMenu();
+                    sendActionToServer("PAUSE_GAME");
                 } else if (selectedOption == 1) { // Exit
                     System.exit(0); // Quitter le jeu
+                    sendActionToServer("EXIT");
                 }
             }
         }
@@ -622,11 +737,16 @@ public class GameEngine extends Application  {
             if (primaryStage != null && !primaryStage.isFullScreen()) {
                 primaryStage.setFullScreen(true);
             }
+
         } else {
             pauseMenu.setVisible(true);
             gameStatus = GameStatus.PAUSED;
             isRunning = false;
         }
+    }
+
+    private void stopGame() {
+        System.exit(0);
     }
 
     public void receiveInput(ButtonAction input) {
@@ -665,6 +785,153 @@ public class GameEngine extends Application  {
                 // Aucune action à gérer
             }
         }
+    }
+
+    public void connectToServer() {
+        try {
+            Socket socket = new Socket(SERVER_ADDRESS, PORT);
+            serverOut = new PrintWriter(socket.getOutputStream(), true);
+
+            BufferedReader serverIn = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            new Thread(() -> {
+                try {
+                    String serverMessage;
+                    while ((serverMessage = serverIn.readLine()) != null) {
+                        if (serverMessage.startsWith("ROLE:")) {
+                            System.out.println("Server assigned role: " + serverMessage);
+                            String role = serverMessage.split(":")[1].trim(); // Récupère la partie après ":" et supprime les espaces inutiles
+                            isPlayer1 = "PLAYER1".equals(role); // Configure le rôle local
+                            System.out.println("Assigned role: " + (isPlayer1 ? "PLAYER1" : "PLAYER2") + " (" + isPlayer1 + ")");
+                        } else if ("BOTH_PLAYERS_CONNECTED".equals(serverMessage)) {
+                            bothPlayersConnected = true;
+                            System.out.println("Both players are connected. Starting game...");
+                        } else {
+                            handleServerMessage(serverMessage); // Appliquer les mises à jour
+                        }
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }).start();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void sendActionToServer(String action) {
+        if (serverOut != null) {
+            serverOut.println(action);
+        }
+      }
+
+    private void handleServerMessage(String message) {
+        if (message == null || message.isEmpty()) {
+            System.err.println("Empty or null message received.");
+            return;
+        }
+
+        // Si le message n'a pas de délimiteur, il est traité directement comme une action
+        if (!message.contains(":")) {
+            Platform.runLater(() -> handleAction(message));
+            return;
+        }
+
+        // Divisez le message si un délimiteur est présent
+        String[] parts = message.split(":", 2);
+        if (parts.length < 2) {
+            System.err.println("Incomplete message received: " + message);
+            return;
+        }
+
+        String action = parts[0].trim();
+        String playerId = parts[1].trim();
+
+        Platform.runLater(() -> handleAction(action, playerId));
+    }
+
+    private void handleAction(String action) {
+        switch (action) {
+            case "PLAYER1_MOVE_RIGHT" -> player.moveRight();
+            case "PLAYER1_MOVE_LEFT" -> player.moveLeft();
+            case "PLAYER1_JUMP" -> player.jump();
+            case "PLAYER1_STOP" -> player.stopMoving();
+            case "PLAYER1_ATTACK" -> player.attack();
+            case "PLAYER1_LAUNCH_SHURIKEN" -> launchShuriken(player);
+            case "PLAYER1_LAUNCH_FIREBALL" -> fireBallAction(player);
+            case "PLAYER1_TELEPORT" -> player.startTeleportation();
+            case "PLAYER2_MOVE_RIGHT" -> player2.moveRight();
+            case "PLAYER2_MOVE_LEFT" -> player2.moveLeft();
+            case "PLAYER2_JUMP" -> player2.jump();
+            case "PLAYER2_STOP" -> player2.stopMoving();
+            case "PLAYER2_ATTACK" -> player2.attack();
+            case "PLAYER2_LAUNCH_SHURIKEN" -> launchShuriken(player2);
+            case "PLAYER2_LAUNCH_FIREBALL" -> fireBallAction(player2);
+            case "PLAYER2_TELEPORT" -> player2.startTeleportation();
+            case "PAUSE_GAME" -> togglePauseMenu();
+            case "EXIT" -> stopGame();
+            default -> System.out.println("Unhandled action: " + action);
+        }
+    }
+
+    private void handleAction(String action, String playerId) {
+        switch (action) {
+            case "MOVE_RIGHT" -> {
+                if ("PLAYER1".equals(playerId)) {
+                    player.moveRight();
+                } else if ("PLAYER2".equals(playerId)) {
+                    player2.moveRight();
+                }
+            }
+            case "MOVE_LEFT" -> {
+                if ("PLAYER1".equals(playerId)) {
+                    player.moveLeft();
+                } else if ("PLAYER2".equals(playerId)) {
+                    player2.moveLeft();
+                }
+            }
+            case "JUMP" -> {
+                if ("PLAYER1".equals(playerId)) {
+                    player.jump();
+                } else if ("PLAYER2".equals(playerId)) {
+                    player2.jump();
+                }
+            }
+            case "STOP" -> {
+                if ("PLAYER1".equals(playerId)) {
+                    player.stopMoving();
+                } else if ("PLAYER2".equals(playerId)) {
+                    player2.stopMoving();
+                }
+            }
+            case "ATTACK" -> {
+                if ("PLAYER1".equals(playerId)) {
+                    player.attack();
+                } else if ("PLAYER2".equals(playerId)) {
+                    player2.attack();
+                }
+            }
+            case "LAUNCH_SHURIKEN" -> {
+                if ("PLAYER1".equals(playerId)) {
+                    launchShuriken(player);
+                } else if ("PLAYER2".equals(playerId)) {
+                    launchShuriken(player2);
+                }
+            }
+            case "LAUNCH_FIREBALL" -> {
+                if ("PLAYER1".equals(playerId)) {
+                    fireBallAction(player);
+                } else if ("PLAYER2".equals(playerId)) {
+                    fireBallAction(player2);
+                }
+            }
+            default -> System.out.println("Unhandled action: " + action);
+        }
+    }
+
+
+
+    private Player getActivePlayer() {
+        return isPlayer1 ? player : player2;
     }
 
 
