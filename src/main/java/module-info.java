@@ -14,6 +14,7 @@ module com.devops.ninjava {
     requires javafx.media;
 
     opens com.devops.ninjava to javafx.fxml;
+    exports com.devops.ninjava;
     exports com.devops.ninjava.manager;
 
     opens com.devops.ninjava.model.hero to javafx.fxml;

@@ -5,6 +5,7 @@ import com.devops.ninjava.model.environnement.Ground;
 import com.devops.ninjava.model.environnement.Wall;
 import com.devops.ninjava.model.enemy.Enemy;
 import com.devops.ninjava.model.item.Item;
+import com.devops.ninjava.model.projectile.EnemyFireball;
 import com.devops.ninjava.model.projectile.FireBall;
 import com.devops.ninjava.model.hero.Player;
 import com.devops.ninjava.model.projectile.Projectile;
@@ -90,6 +91,7 @@ public class GameEngine extends Application  {
     private List<Enemy> enemiesToRemove = new ArrayList<>();
     private List<Item> items = new ArrayList<>();
     private List<Item> itemsToRemove = new ArrayList<>();
+    private List<EnemyFireball> enemyFireballs = new ArrayList<>();
 
     private PrintWriter serverOut;
     private boolean isPlayer1 = true;
@@ -757,6 +759,22 @@ public class GameEngine extends Application  {
         for (FireBall fireball : fireBallsToRemove) {
             fireBalls.remove(fireball);
             gameContainer.getChildren().remove(fireball); // Retirer de l'interface graphique
+        }
+
+    }
+
+    private void updateEnemyFireballs() {
+        List<EnemyFireball> toRemove = new ArrayList<>();
+        for (EnemyFireball fireball : enemyFireballs) {
+            fireball.update();
+            if (!fireball.isActive()) {
+                toRemove.add(fireball);
+            }
+        }
+
+        enemyFireballs.removeAll(toRemove);
+        for (EnemyFireball fireball : toRemove) {
+            gameContainer.getChildren().remove(fireball);
         }
     }
 

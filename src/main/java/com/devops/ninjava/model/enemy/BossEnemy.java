@@ -1,12 +1,15 @@
 package com.devops.ninjava.model.enemy;
 
 import com.devops.ninjava.manager.SoundManager;
+import com.devops.ninjava.model.projectile.EnemyFireball;
 import javafx.embed.swing.SwingFXUtils;
 import javafx.scene.image.Image;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 public class BossEnemy extends Enemy {
 
@@ -35,14 +38,20 @@ public class BossEnemy extends Enemy {
     private boolean isDying = false;    // Indique si le boss est en train de mourir
     private boolean hasBeenHit = false;
 
+    private final List<EnemyFireball> fireballs = new ArrayList<>();
+    private Image fireballImage =null; // Image des boules de feu
+    private static final int FIREBALL_SHOOT_INTERVAL = 2000; // Intervalle de tir des boules de feu
+    private long lastFireballShootTime = 0;
+
+
     private SoundManager soundManager = new SoundManager();
 
     public BossEnemy(double x, double y) {
         super(x, y, 96, 96); // Taille des frames du boss : 96x96
         this.velX = DEFAULT_SPEED; // Initialisation de la vitesse
         this.initialX = x; // Stockage de la position initiale
-        this.health = 1000;      // Santé spécifique au boss
-        this.maxHealth = 1000;
+        this.health = 2500;      // Santé spécifique au boss
+        this.maxHealth = 2500;
         this.isBoss = true;
         loadSprites(); // Chargement des sprites
     }
@@ -82,6 +91,8 @@ public class BossEnemy extends Enemy {
             }
 
             setImageViewFrame(flyingFrames[0]); // Image initiale
+
+            fireballImage = new Image(getClass().getResource("/images/powerUp/fireball.png").toExternalForm());
         } catch (IOException e) {
             System.err.println("Error loading BossEnemy sprites: " + e.getMessage());
         }
@@ -109,8 +120,11 @@ public class BossEnemy extends Enemy {
             lastAttackTime = currentTime;
         }
 
+        shootFireballs();
+
         if (isAttacking) {
             animateAttack();
+
         } else {
             // Gestion du déplacement horizontal
             double currentX = getLayoutX();
@@ -127,6 +141,41 @@ public class BossEnemy extends Enemy {
                 setImageViewFrame(flyingFrames[frameIndex]); // Mettre à jour l'image
             }
             frameCounter++;
+        }
+    }
+
+    private void shootFireballs() {
+        long currentTime = System.currentTimeMillis();
+        if (currentTime - lastFireballShootTime < FIREBALL_SHOOT_INTERVAL) {
+            return;
+        }
+
+        System.out.println("ennemy fireball");
+
+        lastFireballShootTime = currentTime;
+
+        // Directions multiples (ex : droite, gauche, haut, bas, diagonales)
+        double[][] directions = {
+                {1, 0},  // Droite
+                {-1, 0}, // Gauche
+                {0, 1},  // Bas
+                {0, -1}, // Haut
+                {0.7, 0.7}, // Diagonale bas-droite
+                {-0.7, 0.7}, // Diagonale bas-gauche
+                {0.7, -0.7}, // Diagonale haut-droite
+                {-0.7, -0.7} // Diagonale haut-gauche
+        };
+
+        for (double[] direction : directions) {
+            EnemyFireball fireball = new EnemyFireball(
+                    getLayoutX(),
+                    getLayoutY(),
+                    direction[0],
+                    direction[1],
+                    fireballImage
+            );
+            fireballs.add(fireball);
+            this.getChildren().add(fireball); // Ajouter au conteneur
         }
     }
 
