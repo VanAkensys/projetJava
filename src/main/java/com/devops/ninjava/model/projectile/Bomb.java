@@ -1,6 +1,7 @@
 package com.devops.ninjava.model.projectile;
 
-import com.devops.ninjava.model.decor.Ground;
+import com.devops.ninjava.model.environnement.Ground;
+import com.devops.ninjava.model.environnement.Wall;
 import com.devops.ninjava.model.hero.Player;
 import javafx.scene.image.Image;
 import javafx.scene.layout.Pane;
@@ -42,11 +43,6 @@ public class Bomb extends Projectile {
             checkCollision();
         }
 
-        // Si la bombe dépasse une certaine hauteur, elle est désactivée
-        if (getLayoutY() > 600) { // Exemple de hauteur limite
-            System.out.println("Bombe désactivée car elle a dépassé la limite verticale.");
-            deactivate();
-        }
     }
 
     private void checkCollision() {
@@ -59,7 +55,13 @@ public class Bomb extends Projectile {
                     System.out.println("Collision détectée avec un Brick.");
                     deactivate(); // Désactiver la bombe si elle touche un mur
                 }
-            } else if (node instanceof Player) {
+
+            } else if (node instanceof Wall) {
+                if (this.getBoundsInParent().intersects(node.getBoundsInParent())) {
+                    System.out.println("Collision détectée avec un Wall.");
+                    deactivate(); // Désactiver la bombe si elle touche un mur
+                }
+            }else if (node instanceof Player) {
                 Player player = (Player) node;
                 if (this.getBoundsInParent().intersects(player.getBoundsInParent()) && !player.isInvincible()) {
                     System.out.println("Collision détectée avec un joueur.");

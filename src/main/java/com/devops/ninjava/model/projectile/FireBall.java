@@ -1,6 +1,7 @@
 package com.devops.ninjava.model.projectile;
 
-import com.devops.ninjava.model.decor.Ground;
+import com.devops.ninjava.model.environnement.Ground;
+import com.devops.ninjava.model.environnement.Wall;
 import com.devops.ninjava.model.enemy.Enemy;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
@@ -14,7 +15,7 @@ public class FireBall extends Pane {
     private double velX; // Vitesse horizontale
     private double velY; // Vitesse verticale
     private final double gravity = 0.3; // Gravité pour faire descendre la boule de feu
-    private final int damage = 10;
+    private final int damage = 50;
 
     private ImageView fireBallView;
     private boolean isActive;
@@ -52,6 +53,8 @@ public class FireBall extends Pane {
 
         if (object instanceof Ground) {
             return handleBrickCollision((Ground) object);
+        } else if (object instanceof Wall) {
+            return handleWallColision((Wall) object);
         } else if (object instanceof Enemy) {
             handleEnemyCollision((Enemy) object);
             return true;
@@ -82,6 +85,30 @@ public class FireBall extends Pane {
         deactivate();
         return true;
     }
+
+    private boolean handleWallColision(Wall wall) {
+        double fireBallBottom = this.getLayoutY() + HEIGHT;
+        double fireBallTop = this.getLayoutY();
+        double fireBallRight = this.getLayoutX() + WIDTH;
+        double fireBallLeft = this.getLayoutX();
+
+        double brickBottom = wall.getLayoutY() + wall.getHeight();
+        double brickTop = wall.getLayoutY();
+        double brickRight = wall.getLayoutX() + wall.getWidth();
+        double brickLeft = wall.getLayoutX();
+
+        // Collision par le dessus
+        if (fireBallBottom > brickTop && fireBallTop < brickTop &&
+                fireBallRight > brickLeft && fireBallLeft < brickRight) {
+            velY = -Math.abs(velY) * 0.9; // Rebondir avec une vitesse réduite
+            return false; // Ne désactive pas la boule de feu
+        }
+
+        // Autres collisions : Désactiver la boule de feu
+        deactivate();
+        return true;
+    }
+
 
 
     private void handleEnemyCollision(Enemy enemy) {

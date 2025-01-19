@@ -86,7 +86,7 @@ public class MissileEnemy extends Enemy {
 
         EnemysMissile missile = new EnemysMissile(
                 missileX, // Position initiale X
-                missileY, // Position initiale Y
+                missileY -5, // Position initiale Y
                 false, // Direction (par défaut vers la gauche)
                 missileImage // Image du missile
         );

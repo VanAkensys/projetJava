@@ -1,8 +1,6 @@
 package com.devops.ninjava.utils;
 
-import com.devops.ninjava.model.decor.GrassGround;
-import com.devops.ninjava.model.decor.Ground;
-import com.devops.ninjava.model.decor.InteriorGround;
+import com.devops.ninjava.model.environnement.*;
 import com.devops.ninjava.model.enemy.*;
 import javafx.scene.layout.Pane;
 
@@ -15,7 +13,7 @@ public class MapLoader {
 
     private static final int TILE_SIZE = 32; // Taille d'une tuile
 
-    public static void loadMapFromFile(String filePath, Pane gameContainer, List<Ground> grounds, List<Enemy> enemies) throws IOException {
+    public static void loadMapFromFile(String filePath, Pane gameContainer, List<Ground> grounds, List<Enemy> enemies, List<Wall> walls, List<Decoration> decorations) throws IOException {
         List<String> lines = Files.readAllLines(Paths.get(filePath));
 
         for (int row = 0; row < lines.size(); row++) {
@@ -25,14 +23,43 @@ public class MapLoader {
 
                 switch (tileType) {
                     case 'I': // Sol ou brique
-                        InteriorGround interiorGround = new InteriorGround(col * TILE_SIZE, row * TILE_SIZE);
-                        grounds.add(interiorGround);
-                        gameContainer.getChildren().add(interiorGround);
+                        InteriorGround1 interiorGround1 = new InteriorGround1(col * TILE_SIZE, row * TILE_SIZE);
+                        grounds.add(interiorGround1);
+                        gameContainer.getChildren().add(interiorGround1);
                         break;
                     case '2': // Sol ou brique
-                        GrassGround grassGround = new GrassGround(col * TILE_SIZE, row * TILE_SIZE);
-                        grounds.add(grassGround);
-                        gameContainer.getChildren().add(grassGround);
+                        GrassGround1 grassGround1 = new GrassGround1(col * TILE_SIZE, row * TILE_SIZE);
+                        grounds.add(grassGround1);
+                        gameContainer.getChildren().add(grassGround1);
+                        break;
+
+                    case 'W': // Mur
+                        Wall1 wall1 = new Wall1(col * TILE_SIZE, row * TILE_SIZE);
+                        walls.add(wall1);
+                        gameContainer.getChildren().add(wall1);
+                        break;
+
+                    case 'M': // Mur2
+                        Wall2 wall2 = new Wall2(col * TILE_SIZE, row * TILE_SIZE);
+                        walls.add(wall2);
+                        gameContainer.getChildren().add(wall2);
+                        break;
+
+                    case 'N': // Mur2
+                        Wall3 wall3 = new Wall3(col * TILE_SIZE, row * TILE_SIZE);
+                        walls.add(wall3);
+                        gameContainer.getChildren().add(wall3);
+                        break;
+
+                    case 'G': // Grass
+                        Grass grass = new Grass(col * TILE_SIZE, row * TILE_SIZE);
+                        decorations.add(grass);
+                        gameContainer.getChildren().add(grass);
+                        break;
+                    case 'E': // eglise
+                        Eglise eglise = new Eglise(col * TILE_SIZE, row * TILE_SIZE);
+                        walls.add(eglise);
+                        gameContainer.getChildren().add(eglise);
                         break;
 
                     case '3': // Enemy1

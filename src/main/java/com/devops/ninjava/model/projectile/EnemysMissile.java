@@ -1,11 +1,13 @@
 package com.devops.ninjava.model.projectile;
 
-import com.devops.ninjava.model.decor.Ground;
+import com.devops.ninjava.model.environnement.Ground;
+import com.devops.ninjava.model.environnement.Wall;
 import com.devops.ninjava.model.hero.Player;
 import javafx.scene.image.Image;
 import javafx.scene.layout.Pane;
 
 public class EnemysMissile extends Projectile {
+
 
     public EnemysMissile(double x, double y, boolean toRight, Image initialImage) {
         super(x, y, toRight, initialImage);
@@ -23,7 +25,7 @@ public class EnemysMissile extends Projectile {
 
         if (getParent() != null) {
             getParent().getChildrenUnmodifiable().forEach(node -> {
-                if (node instanceof Ground) {
+                if (node instanceof Ground || node instanceof Wall) {
                     if (this.getBoundsInParent().intersects(node.getBoundsInParent())) {
                         handleCollision((Pane) node);
                     }

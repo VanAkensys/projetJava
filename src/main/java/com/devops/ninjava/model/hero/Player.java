@@ -1,6 +1,8 @@
 package com.devops.ninjava.model.hero;
 
-import com.devops.ninjava.model.decor.Ground;
+import com.devops.ninjava.manager.SoundManager;
+import com.devops.ninjava.model.environnement.Ground;
+import com.devops.ninjava.model.environnement.Wall;
 import com.devops.ninjava.model.enemy.Enemy;
 import javafx.animation.AnimationTimer;
 import javafx.embed.swing.SwingFXUtils;
@@ -33,8 +35,8 @@ public class Player extends Pane {
     private boolean isComboActive = false;
     private boolean isTeleporting = false;
     private Rectangle hitbox;
-    private int attackDamage = 5;
-    private int dashDamage = 10;
+    private int attackDamage = 10;
+    private int dashDamage = 15;
     private boolean isDashing = false; // Indique si le joueur est en train de dacher
     private int idleCounter = 0; // Compteur pour l'animation d'inactivité
     public boolean isInvincible = false; // Détermine si le joueur est invincible
@@ -44,6 +46,7 @@ public class Player extends Pane {
     private int shurikens = 200;
 
     private Rectangle debugRectangle;
+    private SoundManager soundManager = new SoundManager();
 
     private Image[] walkRightFrames; // Images pour l'animation droite
     private Image[] walkLeftFrames;  // Images pour l'animation gauche
@@ -98,7 +101,7 @@ public class Player extends Pane {
 
 
     private void initializeHitbox() {
-        double debugWidth = playerView.getFitWidth();   // Utiliser la largeur de l'image
+        double debugWidth = playerView.getFitWidth() -24;   // Utiliser la largeur de l'image
         double debugHeight = playerView.getFitHeight(); // Utiliser la hauteur de l'image
 
         hitbox = new Rectangle(debugWidth, debugHeight);
@@ -249,7 +252,7 @@ public class Player extends Pane {
             return;
         }
 
-        if (isTeleporting) return;
+//        if (isTeleporting) return;
 
         // Appliquer la gravité
         velY += 0.3; // Gravité qui augmente la vitesse verticale
@@ -307,8 +310,8 @@ public class Player extends Pane {
     }
 
     private void updateHitbox() {
-        hitbox.setLayoutX(0); // Synchroniser avec le joueur
-        hitbox.setLayoutY(0);
+        hitbox.setLayoutX(12); // Synchroniser avec le joueur
+        hitbox.setLayoutY(12);
     }
 
     public void moveRight() {
@@ -716,6 +719,7 @@ public class Player extends Pane {
             if (remainingLives > 1) {
                 remainingLives--;
                 System.out.println("Ouch! Lost a life. Remaining lives: " + remainingLives);
+                soundManager.playSound("explosion.mp3", 0.2);
             } else {
                 System.out.println("Game Over!");
                 die(); // Déclencher l'animation de mort
@@ -724,13 +728,6 @@ public class Player extends Pane {
 
             // Activer l'état d'invincibilité et lancer l'animation de récupération
             startInvincibility();
-
-            // Faire reculer le joueur pour simuler l'impact
-            if (velX > 0) { // Si le joueur allait à droite
-                setX(getX() - 30); // Reculer vers la gauche
-            } else { // Si le joueur allait à gauche
-                setX(getX() + 30); // Reculer vers la droite
-            }
 
             // Optionnel : Annuler le mouvement pendant un court instant après l'impact
             stop();
@@ -750,6 +747,9 @@ public class Player extends Pane {
             }
             if (object instanceof Enemy) {
                 handleEnemyCollision((Enemy) object);
+            }
+            if (object instanceof Wall) {
+                handleWallCollision((Wall) object);
             }
             // Vous pouvez ajouter d'autres types d'objets ici
         }
@@ -882,6 +882,64 @@ public class Player extends Pane {
         if (playerTop < brickBottom && playerBottom > brickBottom && playerRight > brickLeft && playerLeft < brickRight) {
             ground.breakBrick(); // Casser la brique
             this.setVelY(2); // Simuler un rebond léger
+        }
+    }
+
+    private void handleWallCollision(Wall wall) {
+        double playerBottom = this.getLayoutY() + this.playerView.getFitHeight();
+        double playerTop = this.getLayoutY();
+        double playerRight = this.getLayoutX() + this.playerView.getFitWidth();
+        double playerLeft = this.getLayoutX();
+
+        double brickBottom = wall.getLayoutY() + wall.getHeight();
+        double brickTop = wall.getLayoutY();
+        double brickRight = wall.getLayoutX() + wall.getWidth();
+        double brickLeft = wall.getLayoutX();
+
+        // Priorité : Collision par-dessus la brique
+        if (velY > 0 && playerBottom > brickTop && playerBottom <= brickTop + 10 &&
+                playerRight > brickLeft && playerLeft < brickRight) {
+            // Positionner le joueur sur la brique
+            this.setY(brickTop - this.playerView.getFitHeight());
+            this.setVelY(0); // Arrêter le mouvement vertical
+            this.isJumping = false;
+            this.isFalling = false;
+
+
+            if (!isAttacking && !isJumping && !isFalling && velX == 0) {
+                animateIdle();
+            } else if (velX>0)
+            {
+                animateMovement(true);
+            }
+            else if (velX<0)
+            {
+                animateMovement(false);
+            }
+            else {
+                idleCounter = 0; // Réinitialiser le compteur si une autre action est en cours
+            }
+
+            return; // Empêche les autres collisions de s'exécuter
+        }
+
+
+        // Priorité : Collision côté gauche
+        if (playerRight > brickLeft && playerLeft < brickLeft &&
+                playerBottom > brickTop && playerTop < brickBottom) {
+            // Bloquer le joueur à gauche
+            this.setX(brickLeft - this.playerView.getFitWidth());
+            this.setVelX(0); // Arrêter le mouvement horizontal
+            return; // Empêche les autres collisions de s'exécuter
+        }
+
+        // Priorité : Collision côté droit
+        if (playerLeft < brickRight && playerRight > brickRight &&
+                playerBottom > brickTop && playerTop < brickBottom) {
+            // Bloquer le joueur à droite
+            this.setX(brickRight);
+            this.setVelX(0); // Arrêter le mouvement horizontal
+            return; // Empêche les autres collisions de s'exécuter
         }
     }
 

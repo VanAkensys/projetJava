@@ -37,8 +37,9 @@ public class BossEnemy extends Enemy {
         super(x, y, 96, 96); // Taille des frames du boss : 96x96
         this.velX = DEFAULT_SPEED; // Initialisation de la vitesse
         this.initialX = x; // Stockage de la position initiale
-        this.health = 5000;      // Santé spécifique au boss
-        this.maxHealth = 5000;
+        this.health = 1000;      // Santé spécifique au boss
+        this.maxHealth = 1000;
+        this.isBoss = true;
         loadSprites(); // Chargement des sprites
     }
 

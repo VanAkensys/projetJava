@@ -1,6 +1,7 @@
 package com.devops.ninjava.model.projectile;
 
-import com.devops.ninjava.model.decor.Ground;
+import com.devops.ninjava.model.environnement.Ground;
+import com.devops.ninjava.model.environnement.Wall;
 import com.devops.ninjava.model.enemy.Enemy;
 import com.devops.ninjava.model.hero.Player;
 import javafx.embed.swing.SwingFXUtils;
@@ -23,7 +24,7 @@ public class Shuriken extends Projectile {
 
     private boolean isEnemyShuriken; // Indique si le shuriken provient d'un ennemi
     private Rectangle hitbox;
-    private int collisionDelay = 10;
+    private int collisionDelay = 20;
 
     public Shuriken(double x, double y, boolean toRight, BufferedImage spriteSheet, boolean isEnemyShuriken) {
         super(x, y, toRight, SwingFXUtils.toFXImage(spriteSheet.getSubimage(5 * 48, 0 * 48, 48, 48), null));
@@ -108,7 +109,14 @@ public class Shuriken extends Projectile {
                     System.out.println("Collision détectée avec un décor.");
                     startImpactAnimation();
                 }
-            } else if (isEnemyShuriken && node instanceof Player) {
+            }
+            else if (node instanceof Wall) {
+                if (collisionDelay <= 0 && hitbox.getBoundsInParent().intersects(node.getBoundsInParent())) {
+                    System.out.println("Collision détectée avec un mur.");
+                    startImpactAnimation();
+                }
+            }
+            else if (isEnemyShuriken && node instanceof Player) {
                 Player player = (Player) node;
                 if (hitbox.getBoundsInParent().intersects(player.getBoundsInParent()) && !player.isInvincible()) {
                     System.out.println("Collision détectée avec le joueur.");

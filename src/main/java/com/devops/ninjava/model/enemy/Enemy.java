@@ -1,6 +1,8 @@
 package com.devops.ninjava.model.enemy;
 
-import com.devops.ninjava.model.decor.Ground;
+import com.devops.ninjava.manager.SoundManager;
+import com.devops.ninjava.model.environnement.Ground;
+import com.devops.ninjava.model.environnement.Wall;
 import com.devops.ninjava.model.hero.Player;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.Pane;
@@ -22,7 +24,9 @@ public abstract class Enemy extends Pane {
     protected int height; // Hauteur de l'ennemi
     protected ImageView enemyView; // Gestion de l'affichage des sprites
     private static final double GRAVITY = 0.3; // Gravité constante
-    private int floor = 550 - 85;
+    private SoundManager soundManager = new SoundManager();
+    protected boolean isBoss = false; // Indique si cet ennemi est un boss
+
 
     public Enemy(double x, double y, int width, int height) {
         this.width = width;
@@ -74,7 +78,7 @@ public abstract class Enemy extends Pane {
         if (this.getBoundsInParent().intersects(object.getBoundsInParent())) {
             if (object instanceof Player) {
                 handleCollisionWithPlayer((Player) object);
-            } else if (object instanceof Ground) {
+            } else if (object instanceof Ground || object instanceof Wall) {
                 handleCollisionWithDecor(object);
             }
         }
@@ -89,7 +93,7 @@ public abstract class Enemy extends Pane {
             // Si le joueur saute sur l'ennemi
             if (playerTop < enemyBottom && player.getVelY() > 0) {
                 takeDamage(50);
-                player.setVelY(-8); // Rebond du joueur
+                player.setVelY(-8);
             } else if (!player.isInvincible()){
                 player.onTouchEnemy(); // Le joueur perd une vie
             }
@@ -97,11 +101,6 @@ public abstract class Enemy extends Pane {
     }
 
     // Gestion des collisions avec les décors (briques, tuyaux, etc.)
-//    public void handleCollisionWithDecor(Pane decor) {
-//        // Inverser la direction horizontale lors d'une collision
-//        velX = -velX;
-//    }
-
     public void handleCollisionWithDecor(Pane decor) {
         if (this.getBoundsInParent().intersects(decor.getBoundsInParent())) {
             double enemyBottom = this.getLayoutY() + this.enemyView.getFitHeight();
@@ -157,6 +156,7 @@ public abstract class Enemy extends Pane {
     }
 
     public void takeDamage(int damage) {
+        soundManager.playSound("hit.mp3",0.05);
         if (isDead) return; // Ignore les nouveaux dégâts si déjà en état "touché" ou mourant
 
         health -= damage; // Réduction de la vie en fonction des dégâts infligés
@@ -210,4 +210,13 @@ public abstract class Enemy extends Pane {
     public void setY(double y) {
         this.y = y;
     }
+
+    public boolean isBoss() {
+        return isBoss;
+    }
+
+    public void setBoss(boolean boss) {
+        isBoss = boss;
+    }
+
 }

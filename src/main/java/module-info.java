@@ -11,6 +11,7 @@ module com.devops.ninjava {
     requires eu.hansolo.tilesfx;
     requires com.almasb.fxgl.all;
     requires javafx.swing;
+    requires javafx.media;
 
     opens com.devops.ninjava to javafx.fxml;
     exports com.devops.ninjava;

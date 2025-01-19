@@ -1,6 +1,7 @@
 package com.devops.ninjava.model.projectile;
 
-import com.devops.ninjava.model.decor.Ground;
+import com.devops.ninjava.model.environnement.Ground;
+import com.devops.ninjava.model.environnement.Wall;
 import com.devops.ninjava.model.enemy.Enemy;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
@@ -54,7 +55,9 @@ public abstract class Projectile extends Pane {
 
         if (object instanceof Ground) {
             handleBrickCollision((Ground) object);
-        }else if (object instanceof Enemy) {
+        } else if (object instanceof Wall) {
+            handleWallCollision((Wall) object);
+        } else if (object instanceof Enemy) {
             handleEnemyCollision((Enemy) object);
         }
         return false;
@@ -62,6 +65,11 @@ public abstract class Projectile extends Pane {
 
     // Gestion des collisions avec une brique
     protected boolean handleBrickCollision(Ground ground) {
+        deactivate(); // Par défaut, désactive le projectile après une collision
+        return true;
+    }
+
+    protected boolean handleWallCollision(Wall wall) {
         deactivate(); // Par défaut, désactive le projectile après une collision
         return true;
     }

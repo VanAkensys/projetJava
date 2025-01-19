@@ -1,7 +1,8 @@
 package com.devops.ninjava.manager;
 
-import com.devops.ninjava.model.Camera;
-import com.devops.ninjava.model.decor.Ground;
+import com.devops.ninjava.model.environnement.Decoration;
+import com.devops.ninjava.model.environnement.Ground;
+import com.devops.ninjava.model.environnement.Wall;
 import com.devops.ninjava.model.enemy.Enemy;
 import com.devops.ninjava.model.projectile.FireBall;
 import com.devops.ninjava.model.hero.Player;
@@ -19,6 +20,7 @@ import javafx.scene.control.Label;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.Pane;
+import javafx.scene.layout.VBox;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.text.Font;
 import javafx.stage.Stage;
@@ -32,7 +34,6 @@ import java.io.PrintWriter;
 import java.net.Socket;
 import java.net.URL;
 import java.net.URLDecoder;
-import java.nio.Buffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -43,12 +44,11 @@ public class GameEngine extends Application  {
     private static final int WIDTH = 800;
     private static final int HEIGHT = 600;
     private static final int WORLD_WIDTH = 20000; // Largeur du monde
-    private static final int WORLD_HEIGHT = 5000; // Hauteur du monde
+    private static final int WORLD_HEIGHT = 2000; // Hauteur du monde
 
 
     private boolean isRunning;
     private GameStatus gameStatus;
-
 
 
     //gestion de l'affichage java fx
@@ -73,6 +73,7 @@ public class GameEngine extends Application  {
 
 
     private Canvas canvas;
+    private SoundManager soundManager = new SoundManager();
 
     //éléments du jeu
     private Player player;
@@ -82,8 +83,8 @@ public class GameEngine extends Application  {
     private List<Projectile> projectiles = new ArrayList<>();
     private List<Projectile> projectilesToRemove = new ArrayList<>();
     private List<Ground> grounds = new ArrayList<>();
-    private List<Ground> toRemove = new ArrayList<>();
-    private Camera camera;
+    private List<Wall> walls = new ArrayList<>();
+    private List<Decoration> decorations = new ArrayList<>();
     private List<Enemy> enemies = new ArrayList<>();
     private List<Enemy> enemiesToRemove = new ArrayList<>();
 
@@ -92,45 +93,175 @@ public class GameEngine extends Application  {
     private boolean isPlayer2Connected = false;
     private static final String SERVER_ADDRESS = "localhost";
     private static final int PORT = 3303;
-    private boolean isMultiplayer = true; // Détermine si le jeu est en mode multijoueur
+    private boolean isMultiplayer = false; // Détermine si le jeu est en mode multijoueur
+    private boolean isVictory = false;
     private boolean bothPlayersConnected = false;
-
-
 
     @Override
     public void start(Stage stage) {
+        // Créer le menu principal
+        Pane mainMenu = new Pane();
+        mainMenu.setPrefSize(WIDTH, HEIGHT);
+        mainMenu.setStyle("-fx-background-color: black;");
+
+        // Charger la police du menu
+        URL fontResource = getClass().getResource("/font/gameFont.ttf");
+        Font menuFont = (fontResource != null) ?
+                Font.loadFont(URLDecoder.decode(fontResource.toExternalForm(), StandardCharsets.UTF_8), 40) :
+                new Font("Arial", 40);
+
+        Font titleFont = (fontResource != null) ?
+                Font.loadFont(URLDecoder.decode(fontResource.toExternalForm(), StandardCharsets.UTF_8), 60) :
+                new Font("Arial", 60);
+
+        // Options de menu
+        Label startGameLabel = new Label("Start Game");
+        Label multiplayerLabel = new Label("Multiplayer");
+        Label exitLabel = new Label("Exit");
+
+        Label titleLabel = new Label("Ninjava");
+        titleLabel.setFont(titleFont);
+        titleLabel.setStyle("-fx-text-fill: blue; -fx-effect: dropshadow(gaussian, black, 3, 0.7, 0, 0);");
 
 
+        Label[] menuOptions = {startGameLabel, multiplayerLabel, exitLabel};
+
+        for (Label label : menuOptions) {
+            label.setFont(menuFont);
+            label.setStyle("-fx-text-fill: white;");
+            label.setLayoutX(WIDTH / 2.0 );
+        }
+
+
+        VBox menuBox = new VBox(30); // Espacement entre les éléments
+        menuBox.getChildren().add(titleLabel);
+        menuBox.getChildren().addAll(startGameLabel, multiplayerLabel, exitLabel);
+        menuBox.setAlignment(javafx.geometry.Pos.CENTER); // Centrer le contenu
+        menuBox.setLayoutX(WIDTH / 2.0 - 200); // Centrer horizontalement
+        menuBox.setLayoutY(HEIGHT / 4.0); // Ajuster pour placer le titre en haut
+
+        mainMenu.getChildren().add(menuBox);
+
+        Scene menuScene = new Scene(mainMenu, WIDTH, HEIGHT);
+        stage.setScene(menuScene);
+        stage.setTitle("NinJava - Main Menu");
+        stage.show();
+
+        soundManager.playTitleMusic();
+
+        // Navigation dans le menu
+        final int[] selectedOption = {0}; // Indique quelle option est actuellement sélectionnée
+        highlightMenuOption(selectedOption[0], menuOptions);
+
+        menuScene.setOnKeyPressed(event -> {
+            switch (event.getCode()) {
+                case UP -> {
+                    selectedOption[0] = (selectedOption[0] - 1 + menuOptions.length) % menuOptions.length;
+                    highlightMenuOption(selectedOption[0], menuOptions);
+                }
+                case DOWN -> {
+                    selectedOption[0] = (selectedOption[0] + 1) % menuOptions.length;
+                    highlightMenuOption(selectedOption[0], menuOptions);
+                }
+                case ENTER -> {
+                    soundManager.stopBackgroundMusic();
+                    switch (selectedOption[0]) {
+                        case 0 -> startGame(stage, false); // Solo
+                        case 1 -> startGame(stage, true); // Multijoueur
+                        case 2 -> Platform.exit(); // Quitter
+                    }
+                }
+            }
+        });
+    }
+
+    private void highlightMenuOption(int selectedIndex, Label[] menuOptions) {
+        for (int i = 0; i < menuOptions.length; i++) {
+            if (i == selectedIndex) {
+                menuOptions[i].setStyle("-fx-text-fill: blue light; -fx-effect: dropshadow(gaussian, white, 2, 0.7, 0, 0);");
+            } else {
+                menuOptions[i].setStyle("-fx-text-fill: white;");
+            }
+        }
+    }
+
+    private void showWaitingForPlayersScreen(Stage stage) {
+        Pane waitingScreen = new Pane();
+        waitingScreen.setPrefSize(WIDTH, HEIGHT);
+        waitingScreen.setStyle("-fx-background-color: black;");
+
+        URL fontResource = getClass().getResource("/font/gameFont.ttf");
+
+        Font menuFont = (fontResource != null) ?
+                Font.loadFont(URLDecoder.decode(fontResource.toExternalForm(), StandardCharsets.UTF_8), 20) :
+                new Font("Arial", 20);
+
+
+
+        Label waitingLabel = new Label("Waiting for players...");
+        waitingLabel.setFont(menuFont);
+        waitingLabel.setStyle("-fx-text-fill: white; -fx-effect: dropshadow(gaussian, blue, 5, 0.5, 0, 0);");
+        waitingLabel.setLayoutX(WIDTH / 2.0 - 200);
+        waitingLabel.setLayoutY(HEIGHT / 2.0 - 20);
+
+        waitingScreen.getChildren().add(waitingLabel);
+
+        Scene waitingScene = new Scene(waitingScreen, WIDTH, HEIGHT);
+        stage.setScene(waitingScene);
+        stage.setTitle("NinJava - Waiting for Players");
+
+        // Vérifiez périodiquement si les deux joueurs sont connectés
+        new Thread(() -> {
+            try {
+                while (!bothPlayersConnected) {
+                    Thread.sleep(500); // Vérification toutes les 500 ms
+                }
+                Platform.runLater(() -> initializeGame(stage)); // Démarrer le jeu une fois connecté
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }).start();
+    }
+
+    private void startGame(Stage stage, boolean isMultiplayer) {
+        this.isMultiplayer = isMultiplayer;
+
+        if (isMultiplayer) {
+            // Afficher l’écran "Waiting for players..."
+            showWaitingForPlayersScreen(stage);
+            connectToServer(); // Démarrer la connexion au serveur
+        } else {
+            initializeGame(stage); // Démarrer directement pour le mode solo
+            bothPlayersConnected = true;
+        }
+    }
+
+
+    private void initializeGame(Stage stage) {
         // Initialisation de la scène et du conteneur principal
         root = new Pane();
         Scene scene = new Scene(root, WIDTH, HEIGHT);
 
         gameStatus = GameStatus.WAITING_FOR_PLAYER;
 
-        stage.setFullScreen(false);
-        stage.setFullScreenExitHint(""); // Optionnel : désactive le message de sortie du plein écran
+        stage.setFullScreen(false); //Met l'ecran à fenetre réduite
+        stage.setFullScreenExitHint(""); // Optionnel : désactiver le message de sortie du plein écran
         stage.setFullScreenExitKeyCombination(null);
-        stage.setResizable(false); // Empêche la redimensionnement de la fenêtre
+        stage.setResizable(false); // Empêcher le redimensionnement de la fenêtre
 
         backgroundContainer = new Pane();
         gameContainer = new Pane();
-
 
         canvas = new Canvas(WIDTH, HEIGHT);
         root.getChildren().add(canvas);
 
         // Initialisation du joueur
-        player = new Player(100, 100);
+        player = new Player(100, 300);
         gameContainer.getChildren().add(player);
 
         if (isMultiplayer) {
-            connectToServer();
             initializePlayer2();
-            if (!bothPlayersConnected) {
-                System.out.println("Waiting for both players to connect...");
-            }
-        } else
-        {
+        } else {
             bothPlayersConnected = true;
         }
 
@@ -139,40 +270,37 @@ public class GameEngine extends Application  {
         drawInitialBackground();
 
         // Initialisation de l'état du jeu
-
-        // Afficher le score
-
         initializeScoreLabel();
         initializePauseMenu();
 
         this.primaryStage = stage;
 
-        camera = new Camera(WIDTH, HEIGHT, WORLD_WIDTH, WORLD_HEIGHT);
         root.getChildren().addAll(backgroundContainer, gameContainer);
+
         try {
-            MapLoader.loadMapFromFile("src/main/resources/images/map1.txt", gameContainer, grounds, enemies);
+            MapLoader.loadMapFromFile("src/main/resources/images/mapDemo.txt", gameContainer, grounds, enemies, walls, decorations);
         } catch (IOException e) {
             System.err.println("Error loading map: " + e.getMessage());
         }
 
         // Gestion des entrées utilisateur
-        scene.setOnKeyPressed(event -> handleKeyPressed(event.getCode().toString()));
-        scene.setOnKeyReleased(event -> handleKeyReleased(event.getCode().toString()));
-
-        // Liez la taille du Canvas à celle de la scène
         canvas.widthProperty().bind(scene.widthProperty());
         canvas.heightProperty().bind(scene.heightProperty());
 
-        // Listener pour détecter les changements de taille de la fenêtre
         stage.widthProperty().addListener((observable, oldValue, newValue) -> drawBackground());
         stage.heightProperty().addListener((observable, oldValue, newValue) -> drawBackground());
 
+        soundManager.playBackgroundMusic();
         // Boucle de jeu
         gameStatus = GameStatus.RUNNING;
         AnimationTimer gameLoop = new AnimationTimer() {
             @Override
             public void handle(long now) {
                 if (isRunning && gameStatus == GameStatus.RUNNING && bothPlayersConnected) {
+
+                        scene.setOnKeyPressed(event -> handleKeyPressed(event.getCode().toString()));
+                        scene.setOnKeyReleased(event -> handleKeyReleased(event.getCode().toString()));
+
                     if (!player.isDead()) {
                         player.update();
                         updateEnergy(getActivePlayer());
@@ -180,7 +308,13 @@ public class GameEngine extends Application  {
                         updateScore(getActivePlayer());
                         updateCamera(getActivePlayer());
                         updateShurikens(getActivePlayer());
+                    } else if (!isMultiplayer) {
+                        soundManager.stopBackgroundMusic();
+                        stop();
+                        showGameOverScreen(primaryStage);
+                        return;
                     }
+
                     if (isMultiplayer && bothPlayersConnected && !player2.isDead()) {
                         player2.update();
                         updateEnergy(getActivePlayer());
@@ -188,32 +322,47 @@ public class GameEngine extends Application  {
                         updateScore(getActivePlayer());
                         updateCamera(getActivePlayer());
                         updateShurikens(getActivePlayer());
+                    } else if (isMultiplayer && player.isDead() && player2.isDead()) {
+                        soundManager.stopBackgroundMusic();
+                        stop();
+                        showGameOverScreen(primaryStage);
+                        return;
                     }
-                    drawBackground();
 
+                    drawBackground();
                     updateBricks();
+                    updateWall();
                     updateFireballs();
                     updateProjectiles();
                     updateEnemies();
-                }else {
+
+                    if (isVictory)
+                    {
+                        soundManager.stopBackgroundMusic();
+                        stop();
+                        showVictoryScreen(primaryStage);
+                    }
+                }
+
+                else {
                     System.out.println("Waiting for players");
                 }
             }
         };
-        // Démarrage du jeu
-        gameLoop.start();
-        isRunning =true;
 
+        gameLoop.start();
+        isRunning = true;
 
         stage.setScene(scene);
-        stage.setTitle("Advanced Game Engine");
+        stage.setTitle("NinJava");
         stage.show();
     }
 
 
+
     private void initializePlayer2() {
         if (!isPlayer2Connected) {
-            player2 = new Player(200, 100); // Position initiale
+            player2 = new Player(200, 300); // Position initiale
             gameContainer.getChildren().add(player2);
             isPlayer2Connected = true;
             System.out.println("Player 2 initialized and added to the game.");
@@ -279,6 +428,7 @@ public class GameEngine extends Application  {
 
         for (Ground ground : grounds) {
             player.handleCollision(ground); // Gestion de la collision dans la classe Player
+
             if (isMultiplayer)
             {
                 player2.handleCollision(ground);
@@ -294,6 +444,18 @@ public class GameEngine extends Application  {
         for (Ground ground : toRemove) {
             gameContainer.getChildren().remove(ground); // Retire la brique de l'affichage
             grounds.remove(ground); // Retire la brique de la liste
+        }
+    }
+
+    private void updateWall() {// Liste temporaire pour supprimer les briques
+
+        for (Wall wall : walls) {
+            player.handleCollision(wall); // Gestion de la collision dans la classe Player
+
+            if (isMultiplayer)
+            {
+                player2.handleCollision(wall);
+            }
         }
     }
 
@@ -317,6 +479,16 @@ public class GameEngine extends Application  {
             // Vérifiez les collisions avec les briques et tuyaux
             for (Ground ground : grounds) {
                 enemy.handleCollision(ground);
+            }
+
+            for (Wall wall : walls) {
+                enemy.handleCollision(wall);
+            }
+
+            if (enemy.isBoss() && enemy.isDead()) {
+                System.out.println("Boss defeated! Launching victory screen...");
+                isVictory = true;
+                return; // Sortir de la méthode
             }
 
             // Si l'ennemi est mort, ajoutez-le à la liste pour suppression
@@ -469,6 +641,14 @@ public class GameEngine extends Application  {
                 }
             }
 
+            for (Wall wall : walls) {
+                if (fireball.handleCollision(wall)) {
+                    fireBallsToRemove.add(fireball); // Marquer pour suppression
+                    break; // Pas besoin de vérifier d'autres collisions pour cette boule de feu
+                }
+            }
+
+
             // Vérifier les collisions avec les Goombas
             for (Enemy enemy : enemies) {
                 if (fireball.handleCollision(enemy)) {
@@ -557,6 +737,10 @@ public class GameEngine extends Application  {
         }
     }
 
+    private void updateScore(Player activePlayer) {
+        scoreLabel.setText("Score: " + activePlayer.getPoints());
+    }
+
     private void updateShurikens(Player activePlayer) {
         shurikenLabel.setText(" x " + activePlayer.getShurikens());
     }
@@ -595,115 +779,68 @@ public class GameEngine extends Application  {
         }
     }
 
-    private void updateScore(Player activePlayer) {
-        scoreLabel.setText("Score: " + activePlayer.getPoints());
-    }
-
     // Réception des actions utilisateur
     private void handleKeyPressed(String keyCode) {
-        if(gameStatus == GameStatus.RUNNING && !player.isDead()) {
-            switch (keyCode) {
-                case "RIGHT" -> {
-                    if (isPlayer1) {
-                        player.moveRight();
-                        sendActionToServer("PLAYER1_MOVE_RIGHT");
-                    } else {
-                        player2.moveRight();
-                        sendActionToServer("PLAYER2_MOVE_RIGHT");
-                    }
+        if (gameStatus == GameStatus.RUNNING) {
+            if (isMultiplayer) {
+                // Multijoueur : envoyer les actions au serveur
+                String action = null;
+                switch (keyCode) {
+                    case "RIGHT" -> action = isPlayer1 ? "PLAYER1_MOVE_RIGHT" : "PLAYER2_MOVE_RIGHT";
+                    case "LEFT" -> action = isPlayer1 ? "PLAYER1_MOVE_LEFT" : "PLAYER2_MOVE_LEFT";
+                    case "UP" -> action = isPlayer1 ? "PLAYER1_JUMP" : "PLAYER2_JUMP";
+                    case "DOWN" -> action = isPlayer1 ? "PLAYER1_TELEPORT" : "PLAYER2_TELEPORT";
+                    case "SPACE" -> action = isPlayer1 ? "PLAYER1_ATTACK" : "PLAYER2_ATTACK";
+                    case "W" -> action = isPlayer1 ? "PLAYER1_LAUNCH_SHURIKEN" : "PLAYER2_LAUNCH_SHURIKEN";
+                    case "X" -> action = isPlayer1 ? "PLAYER1_LAUNCH_FIREBALL" : "PLAYER2_LAUNCH_FIREBALL";
+                    case "ESCAPE" -> action = "PAUSE_GAME";
                 }
-                case "LEFT" -> {
-                    if (isPlayer1) {
-                        player.moveLeft();
-                        sendActionToServer("PLAYER1_MOVE_LEFT");
-                    } else {
-                        player2.moveLeft();
-                        sendActionToServer("PLAYER2_MOVE_LEFT");
-                    }
+
+                if (action != null) {
+                    sendActionToServer(action); // Envoyer l'action au serveur
                 }
-                case "UP" -> {
-                    if (isPlayer1) {
-                        player.jump();
-                        sendActionToServer("PLAYER1_JUMP");
-                    } else {
-                        player2.jump();
-                        sendActionToServer("PLAYER2_JUMP");
+            } else {
+                // Mode local : actions exécutées directement
+                switch (keyCode) {
+                    case "RIGHT" -> player.moveRight();
+                    case "LEFT" -> player.moveLeft();
+                    case "UP" -> player.jump();
+                    case "DOWN" -> {
+                        if (!player.isInvincible()) player.startTeleportation();
                     }
-                }
-                case "DOWN" -> {
-                    if (isPlayer1 && !player.isInvincible()) {
-                        player.startTeleportation();
-                        sendActionToServer("PLAYER1_TELEPORT");
-                    } else if (!isPlayer1 && !player2.isInvincible()) {
-                        player2.startTeleportation();
-                        sendActionToServer("PLAYER2_TELEPORT");
+                    case "SPACE" -> {
+                        if (!player.isAttacking()) player.attack();
                     }
+                    case "W" -> launchShuriken(player);
+                    case "X" -> fireBallAction(player);
+                    case "ESCAPE" -> togglePauseMenu();
                 }
-                case "SPACE" -> {
-                    if (isPlayer1 && !player.isAttacking()) {
-                        player.attack();
-                        sendActionToServer("PLAYER1_ATTACK");
-                    } else if (!isPlayer1 && !player2.isAttacking()) {
-                        player2.attack();
-                        sendActionToServer("PLAYER2_ATTACK");
-                    }
-                }
-                case "W" -> {
-                    if (isPlayer1) {
-                        launchShuriken(player);
-                        sendActionToServer("PLAYER1_LAUNCH_SHURIKEN");
-                    } else {
-                        launchShuriken(player2);
-                        sendActionToServer("PLAYER2_LAUNCH_SHURIKEN");
-                    }
-                }
-                case "X" -> {
-                    if (isPlayer1) {
-                        fireBallAction(player);
-                        sendActionToServer("PLAYER1_LAUNCH_FIREBALL");
-                    } else {
-                        fireBallAction(player2);
-                        sendActionToServer("PLAYER2_LAUNCH_FIREBALL");
-                    }
-                }
-                case "ESCAPE" -> sendActionToServer("PAUSE_GAME");
-                default -> System.out.println("Unhandled key: " + keyCode);
             }
-        }else if (gameStatus == GameStatus.PAUSED) {
+        } else if (gameStatus == GameStatus.PAUSED) {
             handlePauseMenuNavigation(keyCode);
         }
     }
 
     private void handleKeyReleased(String keyCode) {
-        switch (keyCode) {
-            case "RIGHT", "LEFT" ->
-                    {
-                        if (isPlayer1) {
-                            player.stopMoving();
-                            sendActionToServer("PLAYER1_STOP");
-                        } else {
-                            player2.stopMoving();
-                            sendActionToServer("PLAYER2_STOP");
-                        }
-                    } // Arrêt des déplacements horizontaux
-            default -> {
-                // Aucune action spécifique
+        if (isMultiplayer) {
+            // Multijoueur : envoyer l'action "STOP" au serveur
+            String action = null;
+            if ("RIGHT".equals(keyCode) || "LEFT".equals(keyCode)) {
+                action = isPlayer1 ? "PLAYER1_STOP" : "PLAYER2_STOP";
+            }
+            if (action != null) {
+                sendActionToServer(action);
+            }
+        } else {
+            // Mode local : arrêter le déplacement directement
+            if ("RIGHT".equals(keyCode) || "LEFT".equals(keyCode)) {
+                if (isPlayer1) {
+                    player.stopMoving();
+                } else {
+                    player2.stopMoving();
+                }
             }
         }
-    }
-
-    private void togglePauseResume() {
-        if (gameStatus == GameStatus.RUNNING) {
-            gameStatus = GameStatus.PAUSED;
-            isRunning = false;
-        } else if (gameStatus == GameStatus.PAUSED) {
-            gameStatus = GameStatus.RUNNING;
-            isRunning = true;
-        }
-    }
-
-    public GameStatus getGameStatus() {
-        return gameStatus;
     }
 
     private void handlePauseMenuNavigation(String keyCode) {
@@ -749,43 +886,6 @@ public class GameEngine extends Application  {
         System.exit(0);
     }
 
-    public void receiveInput(ButtonAction input) {
-        switch (input) {
-            case M_RIGHT -> {
-                player.moveRight(); // Déplacement à droite
-            }
-            case M_LEFT -> {
-                player.moveLeft(); // Déplacement à gauche
-            }
-            case JUMP -> {
-                player.jump(); // Saut
-            }
-            case ACTION_COMPLETED -> {
-                player.stop(); // Arrêt du mouvement
-            }
-            case PAUSE_RESUME -> {
-                togglePauseResume(); // Pause ou reprise du jeu
-            }
-            case GO_UP -> {
-                // Logique pour monter dans un menu ou une carte
-            }
-            case GO_DOWN -> {
-                // Logique pour descendre dans un menu ou une carte
-            }
-            case SELECT -> {
-                // Logique pour valider une action, ex. démarrer une partie
-            }
-            case GO_TO_START_SCREEN -> {
-                gameStatus = GameStatus.START_SCREEN;
-                isRunning = false; // Retour à l'écran de démarrage
-            }
-            case ATTACK -> {
-            }
-            default -> {
-                // Aucune action à gérer
-            }
-        }
-    }
 
     public void connectToServer() {
         try {
@@ -843,10 +943,6 @@ public class GameEngine extends Application  {
             return;
         }
 
-        String action = parts[0].trim();
-        String playerId = parts[1].trim();
-
-        Platform.runLater(() -> handleAction(action, playerId));
     }
 
     private void handleAction(String action) {
@@ -873,67 +969,101 @@ public class GameEngine extends Application  {
         }
     }
 
-    private void handleAction(String action, String playerId) {
-        switch (action) {
-            case "MOVE_RIGHT" -> {
-                if ("PLAYER1".equals(playerId)) {
-                    player.moveRight();
-                } else if ("PLAYER2".equals(playerId)) {
-                    player2.moveRight();
-                }
-            }
-            case "MOVE_LEFT" -> {
-                if ("PLAYER1".equals(playerId)) {
-                    player.moveLeft();
-                } else if ("PLAYER2".equals(playerId)) {
-                    player2.moveLeft();
-                }
-            }
-            case "JUMP" -> {
-                if ("PLAYER1".equals(playerId)) {
-                    player.jump();
-                } else if ("PLAYER2".equals(playerId)) {
-                    player2.jump();
-                }
-            }
-            case "STOP" -> {
-                if ("PLAYER1".equals(playerId)) {
-                    player.stopMoving();
-                } else if ("PLAYER2".equals(playerId)) {
-                    player2.stopMoving();
-                }
-            }
-            case "ATTACK" -> {
-                if ("PLAYER1".equals(playerId)) {
-                    player.attack();
-                } else if ("PLAYER2".equals(playerId)) {
-                    player2.attack();
-                }
-            }
-            case "LAUNCH_SHURIKEN" -> {
-                if ("PLAYER1".equals(playerId)) {
-                    launchShuriken(player);
-                } else if ("PLAYER2".equals(playerId)) {
-                    launchShuriken(player2);
-                }
-            }
-            case "LAUNCH_FIREBALL" -> {
-                if ("PLAYER1".equals(playerId)) {
-                    fireBallAction(player);
-                } else if ("PLAYER2".equals(playerId)) {
-                    fireBallAction(player2);
-                }
-            }
-            default -> System.out.println("Unhandled action: " + action);
-        }
-    }
-
-
-
     private Player getActivePlayer() {
         return isPlayer1 ? player : player2;
     }
 
+
+    private void showGameOverScreen(Stage stage) {
+        // Attendre 3 secondes avant d'afficher l'écran Game Over
+        new Thread(() -> {
+            try {
+                Thread.sleep(3000); // Attendre 3 secondes pour laisser l'animation se terminer
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+
+            Platform.runLater(() -> {
+                Pane gameOverScreen = new Pane();
+                gameOverScreen.setPrefSize(WIDTH, HEIGHT);
+                gameOverScreen.setStyle("-fx-background-color: black;");
+
+                // Charger la police du menu
+                URL fontResource = getClass().getResource("/font/gameFont.ttf");
+                Font gameOverFont = (fontResource != null) ?
+                        Font.loadFont(URLDecoder.decode(fontResource.toExternalForm(), StandardCharsets.UTF_8), 40) :
+                        new Font("Arial", 40);
+
+                Label gameOverLabel = new Label("GAME OVER");
+                gameOverLabel.setFont(gameOverFont);
+                gameOverLabel.setStyle("-fx-text-fill: white; -fx-effect: dropshadow(gaussian, white, 3, 0.7, 0, 0);");
+                gameOverLabel.setLayoutX(WIDTH / 2.0 - 200); // Centrer horizontalement
+                gameOverLabel.setLayoutY(HEIGHT / 2.0 - 30); // Centrer verticalement
+
+                gameOverScreen.getChildren().add(gameOverLabel);
+
+                Scene gameOverScene = new Scene(gameOverScreen, WIDTH, HEIGHT);
+                stage.setScene(gameOverScene);
+                stage.setTitle("Game Over");
+                soundManager.playSound("gameover.mp3",0.5);
+
+                // Revenir au menu principal après 5 secondes
+                new Thread(() -> {
+                    try {
+                        Thread.sleep(5000); // Attendre 5 secondes
+                        Platform.runLater(() -> start(stage)); // Revenir au menu principal
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }).start();
+            });
+        }).start();
+    }
+
+    private void showVictoryScreen(Stage stage) {
+        // Attendre la fin de l'animation de mort avant d'afficher l'écran Victory
+        new Thread(() -> {
+            try {
+                Thread.sleep(3000); // Ajustez le temps pour correspondre à l'animation du boss
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+
+            Platform.runLater(() -> {
+                Pane victoryScreen = new Pane();
+                victoryScreen.setPrefSize(WIDTH, HEIGHT);
+                victoryScreen.setStyle("-fx-background-color: black;");
+
+                URL fontResource = getClass().getResource("/font/gameFont.ttf");
+                Font victoryFont = (fontResource != null) ?
+                        Font.loadFont(URLDecoder.decode(fontResource.toExternalForm(), StandardCharsets.UTF_8), 40) :
+                        new Font("Arial", 40);
+
+                Label victoryLabel = new Label("YOU WIN!");
+                victoryLabel.setFont(victoryFont);
+                victoryLabel.setStyle("-fx-text-fill: white; -fx-effect: dropshadow(gaussian, white, 3, 0.7, 0, 0);");
+                victoryLabel.setLayoutX(WIDTH / 2.0 - 150);
+                victoryLabel.setLayoutY(HEIGHT / 2.0 - 30);
+
+                victoryScreen.getChildren().add(victoryLabel);
+
+                Scene victoryScene = new Scene(victoryScreen, WIDTH, HEIGHT);
+                stage.setScene(victoryScene);
+                stage.setTitle("Victory!");
+                soundManager.playSound("victory.mp3", 0.5);
+
+                // Revenir au menu principal après 10 secondes
+                new Thread(() -> {
+                    try {
+                        Thread.sleep(10000); // Attendre 10 secondes
+                        Platform.runLater(() -> start(stage)); // Revenir au menu principal
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }).start();
+            });
+        }).start();
+    }
 
     public static void main(String[] args) {
         launch(args); // Démarrage de l'application JavaFX
