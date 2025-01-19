@@ -1,6 +1,8 @@
 package com.devops.ninjava.model.enemy;
 
-import com.devops.ninjava.model.object.Tombstone;
+import com.devops.ninjava.model.item.Heart;
+import com.devops.ninjava.model.item.ShurikenItem;
+import com.devops.ninjava.model.item.Tombstone;
 import javafx.embed.swing.SwingFXUtils;
 import javafx.scene.image.Image;
 import javafx.scene.layout.Pane;
@@ -70,13 +72,24 @@ public class FighterEnemy extends Enemy {
 
     public void die() {
         isDead = true;
-        // Créer la tombe
+        // Créer une tombe
         Tombstone tombstone = new Tombstone(this.getLayoutX(), this.getLayoutY());
 
-        // Ajouter la tombe au conteneur parent
+        // Ajouter la tombe et un item aléatoire au conteneur parent
         if (this.getParent() != null) {
             Pane parent = (Pane) this.getParent();
-            parent.getChildren().add(tombstone); // Ajouter la tombe au conteneur
+            parent.getChildren().add(tombstone);
+
+            // Générer un item aléatoire
+            if (Math.random() < 0.5) {
+                // Créer un Heart
+                Heart heart = new Heart(this.getLayoutX(), this.getLayoutY() - 32, 48, 48, 1);
+                parent.getChildren().add(heart);
+            } else {
+                // Créer un Shuriken
+                ShurikenItem shuriken = new ShurikenItem(this.getLayoutX(), this.getLayoutY() - 32, 96, 96, 5);
+                parent.getChildren().add(shuriken);
+            }
         }
 
         this.setVisible(false); // Masquer l'ennemi après la mort

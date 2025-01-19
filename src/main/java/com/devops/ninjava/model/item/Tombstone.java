@@ -1,4 +1,4 @@
-package com.devops.ninjava.model.object;
+package com.devops.ninjava.model.item;
 
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;

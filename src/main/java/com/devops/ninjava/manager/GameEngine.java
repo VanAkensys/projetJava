@@ -4,6 +4,7 @@ import com.devops.ninjava.model.environnement.Decoration;
 import com.devops.ninjava.model.environnement.Ground;
 import com.devops.ninjava.model.environnement.Wall;
 import com.devops.ninjava.model.enemy.Enemy;
+import com.devops.ninjava.model.item.Item;
 import com.devops.ninjava.model.projectile.FireBall;
 import com.devops.ninjava.model.hero.Player;
 import com.devops.ninjava.model.projectile.Projectile;
@@ -41,8 +42,8 @@ import java.util.List;
 public class GameEngine extends Application  {
 
 
-    private static final int WIDTH = 800;
-    private static final int HEIGHT = 600;
+    private static final int WIDTH = 1000;
+    private static final int HEIGHT = 700;
     private static final int WORLD_WIDTH = 20000; // Largeur du monde
     private static final int WORLD_HEIGHT = 2000; // Hauteur du monde
 
@@ -87,6 +88,8 @@ public class GameEngine extends Application  {
     private List<Decoration> decorations = new ArrayList<>();
     private List<Enemy> enemies = new ArrayList<>();
     private List<Enemy> enemiesToRemove = new ArrayList<>();
+    private List<Item> items = new ArrayList<>();
+    private List<Item> itemsToRemove = new ArrayList<>();
 
     private PrintWriter serverOut;
     private boolean isPlayer1 = true;
@@ -118,13 +121,14 @@ public class GameEngine extends Application  {
         Label startGameLabel = new Label("Start Game");
         Label multiplayerLabel = new Label("Multiplayer");
         Label exitLabel = new Label("Exit");
+        Label helpLabel = new Label("Help");
 
         Label titleLabel = new Label("Ninjava");
         titleLabel.setFont(titleFont);
         titleLabel.setStyle("-fx-text-fill: blue; -fx-effect: dropshadow(gaussian, black, 3, 0.7, 0, 0);");
 
 
-        Label[] menuOptions = {startGameLabel, multiplayerLabel, exitLabel};
+        Label[] menuOptions = {startGameLabel, multiplayerLabel,helpLabel, exitLabel};
 
         for (Label label : menuOptions) {
             label.setFont(menuFont);
@@ -135,7 +139,7 @@ public class GameEngine extends Application  {
 
         VBox menuBox = new VBox(30); // Espacement entre les éléments
         menuBox.getChildren().add(titleLabel);
-        menuBox.getChildren().addAll(startGameLabel, multiplayerLabel, exitLabel);
+        menuBox.getChildren().addAll(startGameLabel, multiplayerLabel,helpLabel, exitLabel);
         menuBox.setAlignment(javafx.geometry.Pos.CENTER); // Centrer le contenu
         menuBox.setLayoutX(WIDTH / 2.0 - 200); // Centrer horizontalement
         menuBox.setLayoutY(HEIGHT / 4.0); // Ajuster pour placer le titre en haut
@@ -145,7 +149,18 @@ public class GameEngine extends Application  {
         Scene menuScene = new Scene(mainMenu, WIDTH, HEIGHT);
         stage.setScene(menuScene);
         stage.setTitle("NinJava - Main Menu");
+        stage.setResizable(false);
         stage.show();
+
+        menuScene.widthProperty().addListener((observable, oldValue, newValue) -> {
+            double newWidth = (double) newValue;
+            menuBox.setLayoutX(newWidth / 2.0 - 200);
+        });
+
+        menuScene.heightProperty().addListener((observable, oldValue, newValue) -> {
+            double newHeight = (double) newValue;
+            menuBox.setLayoutY(newHeight / 4.0);
+        });
 
         soundManager.playTitleMusic();
 
@@ -168,7 +183,8 @@ public class GameEngine extends Application  {
                     switch (selectedOption[0]) {
                         case 0 -> startGame(stage, false); // Solo
                         case 1 -> startGame(stage, true); // Multijoueur
-                        case 2 -> Platform.exit(); // Quitter
+                        case 2 -> showHelpScreen(stage); // Aide
+                        case 3 -> Platform.exit(); // Quitter
                     }
                 }
             }
@@ -189,6 +205,8 @@ public class GameEngine extends Application  {
         Pane waitingScreen = new Pane();
         waitingScreen.setPrefSize(WIDTH, HEIGHT);
         waitingScreen.setStyle("-fx-background-color: black;");
+
+        stage.setResizable(false);
 
         URL fontResource = getClass().getResource("/font/gameFont.ttf");
 
@@ -244,10 +262,13 @@ public class GameEngine extends Application  {
 
         gameStatus = GameStatus.WAITING_FOR_PLAYER;
 
-        stage.setFullScreen(false); //Met l'ecran à fenetre réduite
-        stage.setFullScreenExitHint(""); // Optionnel : désactiver le message de sortie du plein écran
+        stage.setResizable(!isMultiplayer); // Permettre l'agrandissement uniquement en solo
+
+        stage.setFullScreen(false); // Mode plein écran uniquement en solo
+        stage.setFullScreenExitHint(""); // Désactiver le message de sortie
         stage.setFullScreenExitKeyCombination(null);
-        stage.setResizable(false); // Empêcher le redimensionnement de la fenêtre
+        stage.setResizable(false);
+
 
         backgroundContainer = new Pane();
         gameContainer = new Pane();
@@ -334,6 +355,7 @@ public class GameEngine extends Application  {
                     drawBackground();
                     updateBricks();
                     updateWall();
+                    updateItems();
                     updateFireballs();
                     updateProjectiles();
                     updateEnemies();
@@ -358,6 +380,72 @@ public class GameEngine extends Application  {
         stage.setScene(scene);
         stage.setTitle("NinJava");
         stage.show();
+    }
+
+    private void showHelpScreen(Stage stage) {
+        Pane helpPane = new Pane();
+        helpPane.setPrefSize(WIDTH, HEIGHT);
+        helpPane.setStyle("-fx-background-color: black;");
+
+        // Charger la police
+        URL fontResource = getClass().getResource("/font/gameFont.ttf");
+        Font helpFont = (fontResource != null) ?
+                Font.loadFont(URLDecoder.decode(fontResource.toExternalForm(), StandardCharsets.UTF_8), 15) :
+                new Font("Arial", 15);
+
+        Label title = new Label("Help - Key Bindings");
+        title.setFont(helpFont);
+        title.setStyle("-fx-text-fill: yellow; -fx-effect: dropshadow(gaussian, black, 2, 0.7, 0, 0);");
+        title.setLayoutX(WIDTH / 2.0 - 100);
+        title.setLayoutY(20);
+
+        // Liste des commandes
+        String helpText = """
+        Movement:
+        - Arrow Right: Move Right
+        - Arrow Left: Move Left
+        - Arrow Up: Jump
+        - Arrow Down: Teleport (if energy available)
+        
+        Combat:
+        - Space: Melee Attack
+        - W: Launch Shuriken
+        - X: Launch Fireball (requires energy)
+        
+        System:
+        - Escape: Pause Menu
+        """;
+
+        Label helpContent = new Label(helpText);
+        helpContent.setFont(helpFont);
+        helpContent.setStyle("-fx-text-fill: white;");
+        helpContent.setLayoutX(50);
+        helpContent.setLayoutY(80);
+
+        // Bouton de retour
+        Label backLabel = new Label("Press ENTER to return to the menu");
+        backLabel.setFont(helpFont);
+        backLabel.setStyle("-fx-text-fill: green;");
+        backLabel.setLayoutX(WIDTH / 2.0 - 150);
+        backLabel.setLayoutY(HEIGHT - 50);
+
+        helpPane.getChildren().addAll(title, helpContent, backLabel);
+
+        Scene helpScene = new Scene(helpPane, WIDTH, HEIGHT);
+        stage.setResizable(false);
+        stage.setScene(helpScene);
+
+        // Gérer la touche ENTER pour revenir au menu principal
+        helpScene.setOnKeyPressed(event -> {
+            if ("ENTER".equals(event.getCode().toString())) {
+                start(stage); // Retour au menu principal
+            }
+        });
+    }
+
+    private void centerLabel(Label label, double parentWidth, double parentHeight, double offsetX, double offsetY) {
+        label.setLayoutX(parentWidth / 2.0 - label.getWidth() / 2 + offsetX);
+        label.setLayoutY(parentHeight / 2.0 - label.getHeight() / 2 + offsetY);
     }
 
 
@@ -752,6 +840,31 @@ public class GameEngine extends Application  {
         energyLabel.setText("Energy: " + activePlayer.getEnergy()); // Mettre à jour l'affichage de l'énergie
     }
 
+    private void updateItems() {
+        // Liste temporaire pour les items collectés
+        itemsToRemove.clear();
+
+        for (Item item : items) {
+            // Vérifier les collisions avec le joueur principal
+            if (player.getBoundsInParent().intersects(item.getBoundsInParent())) {
+                item.applyEffect(player); // Appliquer l'effet de l'item
+                itemsToRemove.add(item); // Marquer l'item pour suppression
+            }
+
+            // Si multijoueur, vérifier les collisions avec le deuxième joueur
+            if (isMultiplayer && player2.getBoundsInParent().intersects(item.getBoundsInParent())) {
+                item.applyEffect(player2); // Appliquer l'effet de l'item
+                itemsToRemove.add(item); // Marquer l'item pour suppression
+            }
+        }
+
+        // Supprimer les items collectés
+        for (Item item : itemsToRemove) {
+            gameContainer.getChildren().remove(item);
+            items.remove(item);
+        }
+    }
+
     private void updateBackground(double offsetX, double offsetY) {
         GraphicsContext gc = canvas.getGraphicsContext2D();
 
@@ -857,10 +970,21 @@ public class GameEngine extends Application  {
             }
             case "ENTER" -> {
                 if (selectedOption == 0) { // Continue
-                    sendActionToServer("PAUSE_GAME");
+                    if (isMultiplayer) {
+                        // Multijoueur : envoyer au serveur
+                        sendActionToServer("PAUSE_GAME");
+                    } else {
+                        // Mode local : reprendre le jeu directement
+                        togglePauseMenu();
+                    }
                 } else if (selectedOption == 1) { // Exit
-                    System.exit(0); // Quitter le jeu
-                    sendActionToServer("EXIT");
+                    if (isMultiplayer) {
+                        // Multijoueur : envoyer au serveur
+                        sendActionToServer("EXIT");
+                    } else {
+                        // Mode local : quitter directement
+                        System.exit(0);
+                    }
                 }
             }
         }
@@ -869,16 +993,12 @@ public class GameEngine extends Application  {
     private void togglePauseMenu() {
         if (gameStatus == GameStatus.PAUSED) {
             pauseMenu.setVisible(false);
+            System.out.println("Resuming game...");
             gameStatus = GameStatus.RUNNING;
             isRunning = true;
-
-            // Remettre en plein écran lorsque le jeu reprend
-            if (primaryStage != null && !primaryStage.isFullScreen()) {
-                primaryStage.setFullScreen(true);
-            }
-
         } else {
             pauseMenu.setVisible(true);
+            System.out.println("Game paused.");
             gameStatus = GameStatus.PAUSED;
             isRunning = false;
         }
@@ -1006,7 +1126,17 @@ public class GameEngine extends Application  {
 
                 Scene gameOverScene = new Scene(gameOverScreen, WIDTH, HEIGHT);
                 stage.setScene(gameOverScene);
+                stage.setResizable(false);
                 stage.setTitle("Game Over");
+
+                gameOverScene.widthProperty().addListener((observable, oldValue, newValue) -> {
+                    centerLabel(gameOverLabel, (double) newValue, gameOverScreen.getHeight(), 0, 0);
+                });
+
+                gameOverScene.heightProperty().addListener((observable, oldValue, newValue) -> {
+                    centerLabel(gameOverLabel, gameOverScreen.getWidth(), (double) newValue, 0, 0);
+                });
+
                 soundManager.playSound("gameover.mp3",0.5);
 
                 // Revenir au menu principal après 5 secondes
@@ -1052,6 +1182,7 @@ public class GameEngine extends Application  {
                 Scene victoryScene = new Scene(victoryScreen, WIDTH, HEIGHT);
                 stage.setScene(victoryScene);
                 stage.setTitle("Victory!");
+                stage.setResizable(false);
                 soundManager.playSound("victory.mp3", 0.5);
 
                 // Revenir au menu principal après 10 secondes

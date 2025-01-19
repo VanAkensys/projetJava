@@ -4,6 +4,7 @@ import com.devops.ninjava.manager.SoundManager;
 import com.devops.ninjava.model.environnement.Ground;
 import com.devops.ninjava.model.environnement.Wall;
 import com.devops.ninjava.model.enemy.Enemy;
+import com.devops.ninjava.model.item.Item;
 import javafx.animation.AnimationTimer;
 import javafx.embed.swing.SwingFXUtils;
 import javafx.scene.canvas.GraphicsContext;
@@ -19,7 +20,7 @@ import java.io.IOException;
 
 public class Player extends Pane {
 
-    private int remainingLives;
+    public int remainingLives;
     private int coins;
     private int points;
     private boolean isJumping;
@@ -43,7 +44,7 @@ public class Player extends Pane {
     private long invincibilityStartTime;
     private long movementStartTime = 0; // Temps du début du mouvement
     private boolean isMoving = false;
-    private int shurikens = 200;
+    public int shurikens = 200;
 
     private Rectangle debugRectangle;
     private SoundManager soundManager = new SoundManager();
@@ -76,8 +77,8 @@ public class Player extends Pane {
     private int energy = 100; // Énergie actuelle
     private static final int MAX_ENERGY = 100; // Maximum d'énergie
     private static final int ENERGY_REGEN_RATE = 2; // Régénération par intervalle
-    public static final int ENERGY_COST_FIREBALL = 5; // Coût pour lancer une boule de feu
-    public static final int ENERGY_COST_TELEPORT = 20; // Coût pour se téléporter
+    public static final int ENERGY_COST_FIREBALL = 2; // Coût pour lancer une boule de feu
+    public static final int ENERGY_COST_TELEPORT = 10; // Coût pour se téléporter
 
     private long lastEnergyRegenTime = System.currentTimeMillis();
 
@@ -91,6 +92,7 @@ public class Player extends Pane {
         this.isAttacking = false;
         this.jumpHeight = 5;
         this.jumpCounter = 0;
+        this.shurikens = 200;
 
 
         initializeImages();
@@ -271,6 +273,14 @@ public class Player extends Pane {
                 isJumping = false;
                 isFalling = true;
             }
+        }
+
+        // Vérifier les collisions avec les items
+        if (getParent() != null) {
+            getParent().getChildrenUnmodifiable().stream()
+                    .filter(node -> node instanceof Item) // Filtrer les items
+                    .map(node -> (Item) node)
+                    .forEach(this::onTouchItem); // Vérifier la collision avec chaque item
         }
 
         if (isFalling) {
@@ -940,6 +950,20 @@ public class Player extends Pane {
             this.setX(brickRight);
             this.setVelX(0); // Arrêter le mouvement horizontal
             return; // Empêche les autres collisions de s'exécuter
+        }
+    }
+
+    public void onTouchItem(Item item) {
+        if (this.getBoundsInParent().intersects(item.getBoundsInParent())) {
+            soundManager.playSound("item.mp3",0.1);
+            // Appliquer l'effet de l'item
+            item.applyEffect(this);
+
+            // Supprimer l'item de la scène après utilisation
+            if (item.getParent() != null) {
+                Pane parent = (Pane) item.getParent();
+                parent.getChildren().remove(item);
+            }
         }
     }
 
