@@ -1,5 +1,6 @@
 package com.devops.ninjava.model.enemy;
 
+import com.devops.ninjava.manager.SoundManager;
 import javafx.embed.swing.SwingFXUtils;
 import javafx.scene.image.Image;
 
@@ -32,6 +33,9 @@ public class BossEnemy extends Enemy {
     private boolean isAttacking = false; // Indique si le boss est en train d'attaquer
     private boolean isHurt = false;     // Indique si le boss est en état "touché"
     private boolean isDying = false;    // Indique si le boss est en train de mourir
+    private boolean hasBeenHit = false;
+
+    private SoundManager soundManager = new SoundManager();
 
     public BossEnemy(double x, double y) {
         super(x, y, 96, 96); // Taille des frames du boss : 96x96

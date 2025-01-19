@@ -46,4 +46,16 @@ public class SoundManager {
             System.err.println("Erreur lors de la lecture de la musique de fond : " + e.getMessage());
         }
     }
+
+    public void playBossMusic() {
+        try {
+            Media bgMusic = new Media(getClass().getResource("/sound/boss.mp3").toExternalForm());
+            backgroundMusic = new MediaPlayer(bgMusic);
+            backgroundMusic.setCycleCount(MediaPlayer.INDEFINITE); // Boucle infinie
+            backgroundMusic.setVolume(0.5); // Réduire le volume si nécessaire
+            backgroundMusic.play();
+        } catch (Exception e) {
+            System.err.println("Erreur lors de la lecture de la musique de fond : " + e.getMessage());
+        }
+    }
 }

@@ -77,7 +77,7 @@ public abstract class Projectile extends Pane {
 
     // Gestion des collisions avec un ennemi
     protected boolean handleEnemyCollision(Enemy enemy) {
-        enemy.die(); // Tuer le Goomba
+        enemy.die();
         deactivate(); // Désactiver le projectile après l'impact
         return true;
     }

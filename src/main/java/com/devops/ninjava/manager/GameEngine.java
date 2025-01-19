@@ -310,6 +310,7 @@ public class GameEngine extends Application  {
                         updateShurikens(getActivePlayer());
                     } else if (!isMultiplayer) {
                         soundManager.stopBackgroundMusic();
+                        soundManager.playSound("die.mp3",0.4);
                         stop();
                         showGameOverScreen(primaryStage);
                         return;
@@ -324,6 +325,7 @@ public class GameEngine extends Application  {
                         updateShurikens(getActivePlayer());
                     } else if (isMultiplayer && player.isDead() && player2.isDead()) {
                         soundManager.stopBackgroundMusic();
+                        soundManager.playSound("die.mp3",0.4);
                         stop();
                         showGameOverScreen(primaryStage);
                         return;
@@ -978,7 +980,7 @@ public class GameEngine extends Application  {
         // Attendre 3 secondes avant d'afficher l'écran Game Over
         new Thread(() -> {
             try {
-                Thread.sleep(3000); // Attendre 3 secondes pour laisser l'animation se terminer
+                Thread.sleep(5000); // Attendre 3 secondes pour laisser l'animation se terminer
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }

@@ -1,7 +1,9 @@
 package com.devops.ninjava.model.enemy;
 
+import com.devops.ninjava.model.object.Tombstone;
 import javafx.embed.swing.SwingFXUtils;
 import javafx.scene.image.Image;
+import javafx.scene.layout.Pane;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -68,6 +70,15 @@ public class FighterEnemy extends Enemy {
 
     public void die() {
         isDead = true;
+        // Créer la tombe
+        Tombstone tombstone = new Tombstone(this.getLayoutX(), this.getLayoutY());
+
+        // Ajouter la tombe au conteneur parent
+        if (this.getParent() != null) {
+            Pane parent = (Pane) this.getParent();
+            parent.getChildren().add(tombstone); // Ajouter la tombe au conteneur
+        }
+
         this.setVisible(false); // Masquer l'ennemi après la mort
     }
 }
