@@ -1,5 +1,6 @@
 package com.devops.ninjava.model.item;
 
+import com.devops.ninjava.model.hero.Player;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.Pane;
 
@@ -26,5 +27,5 @@ public abstract class Item extends Pane {
         this.setLayoutY(y);
     }
 
-    public abstract void applyEffect(com.devops.ninjava.model.hero.Player player);
+    public abstract void applyEffect(Player player);
 }
